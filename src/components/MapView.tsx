@@ -60,11 +60,16 @@ function MapHandler({ holes, currentHoleIndex }: { holes: Hole[], currentHoleInd
     if (!map || holes.length === 0) return;
 
     if (currentHoleIndex !== null) {
-      // Use panToBounds for smooth continuous zoom animation
-      const bounds = new google.maps.LatLngBounds();
-      bounds.extend(holes[currentHoleIndex].teeLocation);
-      bounds.extend(holes[currentHoleIndex].pinLocation);
-      map.panToBounds(bounds, { top: 100, right: 60, bottom: 280, left: 60 });
+      // Calculate center and zoom for the hole
+      const tee = holes[currentHoleIndex].teeLocation;
+      const pin = holes[currentHoleIndex].pinLocation;
+      const centerLat = (tee.lat + pin.lat) / 2;
+      const centerLng = (tee.lng + pin.lng) / 2;
+      
+      // Pan to center with smooth animation
+      map.panTo({ lat: centerLat, lng: centerLng });
+      // Then zoom in with smooth animation
+      map.setZoom(19);
     } else {
       // Default view: Show full course at zoom level 15
       map.setCenter(holes[0].teeLocation);
