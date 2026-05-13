@@ -1,0 +1,6 @@
+{
+  "name": "Street Golf",
+  "description": "A mobile-first 9-hole street golf navigator and scorekeeper.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

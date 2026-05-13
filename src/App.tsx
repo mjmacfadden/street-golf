@@ -1,0 +1,445 @@
+import { useState, useEffect, ReactNode } from 'react';
+import { APIProvider } from '@vis.gl/react-google-maps';
+import { Map as MapIcon, List as ListIcon, History as HistoryIcon, Play, ChevronLeft, ChevronRight, Pencil, Flag, Trophy, Image as ImageIcon, X, Home, Info, AlertTriangle } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import MapView from './components/MapView';
+import Scorecard from './components/Scorecard';
+import { STREET_GOLF_COURSE } from './constants/course';
+import { Round, Score } from './types';
+
+const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_PLATFORM_KEY || '';
+const hasValidKey = Boolean(API_KEY) && API_KEY !== 'YOUR_API_KEY' && API_KEY !== 'MY_MAPS_KEY';
+
+export default function App() {
+  const [activeTab, setActiveTab] = useState<'home' | 'map' | 'scorecard' | 'history'>('home');
+  const [currentHoleIdx, setCurrentHoleIdx] = useState<number | null>(null);
+  const [isCardCollapsed, setIsCardCollapsed] = useState(false);
+  const [currentRound, setCurrentRound] = useState<Round | null>(null);
+  const [history, setHistory] = useState<Round[]>([]);
+  const [tempScore, setTempScore] = useState<number>(4);
+  const [lightboxImage, setLightboxImage] = useState<{ url: string; title: string } | null>(null);
+  const [showTip, setShowTip] = useState(false);
+
+  // Load persistence
+  useEffect(() => {
+    const savedRound = localStorage.getItem('currentRound');
+    const savedHistory = localStorage.getItem('roundHistory');
+    
+    if (savedRound) setCurrentRound(JSON.parse(savedRound));
+    if (savedHistory) setHistory(JSON.parse(savedHistory));
+  }, []);
+
+  // Save persistence
+  useEffect(() => {
+    if (currentRound) localStorage.setItem('currentRound', JSON.stringify(currentRound));
+    localStorage.setItem('roundHistory', JSON.stringify(history));
+  }, [currentRound, history]);
+
+  const startNewRound = () => {
+    const newRound: Round = {
+      id: Date.now().toString(),
+      date: new Date().toISOString(),
+      scores: {},
+      isCompleted: false
+    };
+    setCurrentRound(newRound);
+    setCurrentHoleIdx(null);
+    setActiveTab('map');
+    // Wait 1.5 seconds then zoom to hole 1 over 2 seconds
+    setTimeout(() => {
+      setCurrentHoleIdx(0);
+      setTempScore(STREET_GOLF_COURSE[0].par);
+    }, 1500);
+  };
+
+  const handleSaveScore = () => {
+    if (!currentRound || currentHoleIdx === null) return;
+    
+    const holeNum = STREET_GOLF_COURSE[currentHoleIdx].number;
+    const newScores = {
+      ...currentRound.scores,
+      [holeNum]: { strokes: tempScore }
+    };
+    
+    setCurrentRound({ ...currentRound, scores: newScores });
+    
+    // Move to next hole or scorecard if finished
+    if (currentHoleIdx < STREET_GOLF_COURSE.length - 1) {
+      const nextIdx = currentHoleIdx + 1;
+      setCurrentHoleIdx(nextIdx);
+      setTempScore(STREET_GOLF_COURSE[nextIdx].par);
+    } else {
+      setActiveTab('scorecard');
+    }
+  };
+
+  const finishRound = () => {
+    if (!currentRound) return;
+    const completedRound = { ...currentRound, isCompleted: true };
+    setHistory([completedRound, ...history]);
+    setCurrentRound(null);
+    setCurrentHoleIdx(null);
+    setActiveTab('history');
+    localStorage.removeItem('currentRound');
+  };
+
+  if (!hasValidKey) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-dark text-slate-100 p-6 font-sans">
+        <div className="text-center max-w-md">
+          <div className="w-20 h-20 bg-lime rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-lime/20">
+            <Flag size={40} className="text-dark" />
+          </div>
+          <h2 className="text-3xl font-black mb-4 tracking-tight uppercase italic">Google Maps Required</h2>
+          <p className="text-slate-400 mb-8">Set up your API key to start navigating the course.</p>
+          <div className="bg-navy/50 p-6 rounded-2xl border border-white/10 text-left space-y-4 backdrop-blur-sm">
+            <p className="text-sm"><span className="text-lime font-bold mr-2">1.</span> Get an API key from the Google Cloud Console.</p>
+            <p className="text-sm"><span className="text-lime font-bold mr-2">2.</span> Open <strong>Settings</strong> (⚙️) → <strong>Secrets</strong>.</p>
+            <p className="text-sm"><span className="text-lime font-bold mr-2">3.</span> Add <code>GOOGLE_MAPS_PLATFORM_KEY</code> as the secret name and paste your key.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <APIProvider apiKey={API_KEY} version="weekly">
+      <div className="h-screen flex flex-col bg-dark text-slate-100 overflow-hidden font-sans italic-font-fix">
+        <main className="flex-1 relative overflow-hidden">
+          <AnimatePresence mode="wait">
+            {activeTab === 'home' && (
+              <motion.div 
+                key="home"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 1.05 }}
+                className="h-full flex flex-col items-center justify-center p-8 text-center bg-[radial-gradient(circle_at_center,_var(--color-navy)_0%,_var(--color-dark)_70%)]"
+              >
+                
+                <div className="space-y-0 mb-8">
+                  <h1 className="text-8xl font-[1000] tracking-tighter italic leading-[0.75] text-white mix-blend-difference">
+                    STREET
+                  </h1>
+                  <h1 className="text-8xl font-[1000] tracking-tighter italic leading-[0.75] text-lime">
+                    GOLF
+                  </h1>
+                </div>
+                
+                <p className="text-slate-400 mb-12 text-lg max-w-[300px] font-bold leading-tight uppercase tracking-tight">
+                  THE SOUTHBRIDGE OPEN <span className="block text-lime/50 text-sm mt-1">EST. 2024</span>
+                </p>
+                
+                <button 
+                  onClick={startNewRound}
+                  className="group relative flex items-center gap-3 bg-lime text-dark px-8 py-4 rounded-2xl font-[1000] text-xl transition-all hover:scale-105 active:scale-95 shadow-[0_15px_35px_rgba(191,255,0,0.25)] italic border-b-4 border-lime-700 whitespace-nowrap"
+                >
+                  <Play fill="currentColor" size={20} />
+                  START ROUND
+                </button>
+              </motion.div>
+            )}
+
+            {activeTab === 'map' && (
+              <motion.div 
+                key="map"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="h-full w-full relative"
+              >
+                <MapView 
+                  holes={STREET_GOLF_COURSE} 
+                  currentHoleIndex={currentHoleIdx}
+                  onMarkerClick={(idx) => setCurrentHoleIdx(idx)}
+                />
+
+                {currentHoleIdx !== null && (
+                  <div className="absolute bottom-6 left-4 right-4 z-10">
+                    <motion.div 
+                      initial={{ y: 50, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      className="bg-slate-900/90 backdrop-blur-md rounded-3xl border border-slate-700 shadow-2xl overflow-hidden"
+                    >
+                      {/* Header/Collapse Toggle */}
+                      <div 
+                        className="p-4 flex items-center justify-between bg-navy/50"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-lime text-dark flex items-center justify-center font-black text-sm italic">
+                            {STREET_GOLF_COURSE[currentHoleIdx].number}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-black text-sm leading-none uppercase italic tracking-tight">{STREET_GOLF_COURSE[currentHoleIdx].name}</h3>
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); setShowTip(!showTip); }}
+                                className="text-lime hover:text-lime/80 transition-colors"
+                              >
+                                <Info size={14} />
+                              </button>
+                              {STREET_GOLF_COURSE[currentHoleIdx].hazard && (
+                                <AlertTriangle size={14} className="text-white" />
+                              )}
+                            </div>
+                            <p className="text-[10px] text-lime font-black uppercase mt-1 tracking-wider inline-flex items-center gap-2 italic">
+                               PAR {STREET_GOLF_COURSE[currentHoleIdx].par}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="flex gap-1">
+                             <button 
+                               disabled={currentHoleIdx === 0}
+                               onClick={(e) => { e.stopPropagation(); setCurrentHoleIdx(Math.max(0, currentHoleIdx - 1)); }}
+                               className="p-2 text-slate-400 hover:text-white disabled:opacity-30"
+                             >
+                               <ChevronLeft size={20} />
+                             </button>
+                             <button 
+                               disabled={currentHoleIdx === STREET_GOLF_COURSE.length - 1}
+                               onClick={(e) => { e.stopPropagation(); setCurrentHoleIdx(Math.min(STREET_GOLF_COURSE.length - 1, currentHoleIdx + 1)); }}
+                               className="p-2 text-slate-400 hover:text-white disabled:opacity-30"
+                             >
+                               <ChevronRight size={20} />
+                             </button>
+                          </div>
+                          <motion.div
+                            onClick={() => setIsCardCollapsed(!isCardCollapsed)}
+                            animate={{ rotate: isCardCollapsed ? 180 : 0 }}
+                            className="text-slate-500 cursor-pointer hover:text-slate-400 transition-colors"
+                          >
+                            <ChevronRight size={18} className="rotate-90" />
+                          </motion.div>
+                        </div>
+                      </div>
+
+                      <AnimatePresence>
+                        {!isCardCollapsed && (
+                          <motion.div 
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="px-5 pb-5 pt-3"
+                          >
+                            <div className="space-y-3">
+                              {showTip && (
+                                <motion.div 
+                                  initial={{ opacity: 0, y: -10 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  exit={{ opacity: 0, y: -10 }}
+                                  className="bg-navy/60 border border-lime/30 rounded-lg p-3 text-sm text-slate-200 italic leading-relaxed"
+                                >
+                                  {STREET_GOLF_COURSE[currentHoleIdx].tip}
+                                </motion.div>
+                              )}
+                              <div 
+                                onClick={() => STREET_GOLF_COURSE[currentHoleIdx].teeImage && setLightboxImage({ 
+                                  url: STREET_GOLF_COURSE[currentHoleIdx].teeImage!, 
+                                  title: `Hole ${STREET_GOLF_COURSE[currentHoleIdx].number} Tee` 
+                                })}
+                                className={`flex gap-2 items-start py-2 px-3 bg-slate-950/50 rounded-xl border border-slate-800 transition-colors ${STREET_GOLF_COURSE[currentHoleIdx].teeImage ? 'cursor-pointer hover:bg-slate-800/80 active:scale-[0.98]' : ''}`}
+                              >
+                                <div className="mt-1 w-2 h-2 rounded-full bg-white border border-green-500 shrink-0" />
+                                <div className="flex-1">
+                                  <p className="text-[10px] text-slate-500 uppercase font-bold tracking-tight flex items-center justify-between">
+                                    Tee
+                                    {STREET_GOLF_COURSE[currentHoleIdx].teeImage && <ImageIcon size={10} className="text-lime" />}
+                                  </p>
+                                  <p className="text-xs text-slate-200 font-medium">{STREET_GOLF_COURSE[currentHoleIdx].teeDescription}</p>
+                                </div>
+                              </div>
+                              <div 
+                                onClick={() => STREET_GOLF_COURSE[currentHoleIdx].pinImage && setLightboxImage({ 
+                                  url: STREET_GOLF_COURSE[currentHoleIdx].pinImage!, 
+                                  title: `Hole ${STREET_GOLF_COURSE[currentHoleIdx].number} Pin` 
+                                })}
+                                className={`flex gap-2 items-start py-2 px-3 bg-dark/50 rounded-xl border border-white/5 transition-colors ${STREET_GOLF_COURSE[currentHoleIdx].pinImage ? 'cursor-pointer hover:bg-navy/80 active:scale-[0.98]' : ''}`}
+                              >
+                                <div className="mt-1 w-2 h-2 rounded-full bg-lime shrink-0" />
+                                <div className="flex-1">
+                                  <p className="text-[10px] text-slate-500 uppercase font-bold tracking-tight flex items-center justify-between">
+                                    Pin
+                                    {STREET_GOLF_COURSE[currentHoleIdx].pinImage && <ImageIcon size={10} className="text-lime" />}
+                                  </p>
+                                  <p className="text-xs text-slate-200 font-medium">{STREET_GOLF_COURSE[currentHoleIdx].pinDescription}</p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center justify-between border-t border-white/5 pt-4 mt-2">
+                                <div className="flex items-center gap-3">
+                                  <button 
+                                    onClick={() => setTempScore(Math.max(1, tempScore - 1))}
+                                    className="w-10 h-10 rounded-xl bg-navy border border-white/5 flex items-center justify-center text-xl font-bold hover:bg-navy/80"
+                                  >
+                                    -
+                                  </button>
+                                  <div className="text-center w-8">
+                                    <p className="text-2xl font-black italic">{tempScore}</p>
+                                  </div>
+                                  <button 
+                                    onClick={() => setTempScore(tempScore + 1)}
+                                    className="w-10 h-10 rounded-xl bg-navy border border-white/5 flex items-center justify-center text-xl font-bold hover:bg-navy/80"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                                <button 
+                                  onClick={handleSaveScore}
+                                  className="bg-lime text-dark px-5 py-3 rounded-xl font-[900] flex items-center gap-2 hover:bg-lime/90 transition-colors shadow-lg shadow-lime/20 italic"
+                                >
+                                  <Pencil size={18} />
+                                  Mark Score
+                                </button>
+                              </div>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </motion.div>
+                  </div>
+                )}
+              </motion.div>
+            )}
+
+            {activeTab === 'scorecard' && currentRound && (
+              <motion.div 
+                key="scorecard"
+                initial={{ x: 100, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: -100, opacity: 0 }}
+                className="h-full overflow-y-auto bg-dark"
+              >
+                <Scorecard round={currentRound} holes={STREET_GOLF_COURSE} />
+                <div className="p-4 bg-dark/80 backdrop-blur-lg border-t border-white/5 fixed bottom-20 left-0 right-0">
+                  <button 
+                    onClick={finishRound}
+                    className="w-full bg-lime text-dark py-4 rounded-xl font-black flex items-center justify-center gap-2 shadow-xl shadow-lime/10 italic"
+                  >
+                    <Trophy size={20} />
+                    FINISH ROUND
+                  </button>
+                </div>
+              </motion.div>
+            )}
+
+            {activeTab === 'history' && (
+              <motion.div 
+                key="history"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="h-full p-6 overflow-y-auto pb-24 bg-dark"
+              >
+                <h2 className="text-3xl font-[900] mb-8 flex items-center gap-3 uppercase italic tracking-tighter">
+                  <HistoryIcon size={32} className="text-lime" />
+                  HISTORY
+                </h2>
+                {history.length === 0 ? (
+                  <div className="text-center py-20 bg-navy/30 rounded-3xl border border-white/5 border-dashed">
+                    <p className="text-slate-500 font-medium">No rounds completed yet.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {history.map(round => (
+                      <div key={round.id} className="bg-navy/50 p-5 rounded-2xl border border-white/5 backdrop-blur-sm transition-all hover:border-lime/30">
+                        <div className="flex justify-between items-center mb-3">
+                          <p className="text-xs font-black text-lime uppercase tracking-widest italic">{new Date(round.date).toLocaleDateString()}</p>
+                          <p className="text-white/50 text-[10px] font-black uppercase">9 HOLES</p>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p className="text-4xl font-[1000] italic leading-none tracking-tighter">
+                              {(Object.values(round.scores) as Score[]).reduce((a, b) => a + b.strokes, 0)}
+                            </p>
+                            <p className="text-[10px] uppercase text-slate-500 font-black mt-1">Total strokes</p>
+                          </div>
+                          <button className="p-3 bg-white/5 rounded-full text-lime transition-colors hover:bg-lime hover:text-dark">
+                            <ChevronRight size={20} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Lightbox */}
+          <AnimatePresence>
+            {lightboxImage && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setLightboxImage(null)}
+                className="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-xl flex flex-col items-center justify-center p-6"
+              >
+                <div className="absolute top-6 right-6">
+                  <button className="p-3 bg-slate-800 rounded-full text-white">
+                    <X size={24} />
+                  </button>
+                </div>
+                <motion.div
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.9, opacity: 0 }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-full max-w-lg aspect-square rounded-3xl overflow-hidden shadow-2xl border border-slate-800"
+                >
+                  <img 
+                    src={lightboxImage.url} 
+                    alt={lightboxImage.title}
+                    className="w-full h-full object-cover"
+                  />
+                </motion.div>
+                <h3 className="mt-6 text-xl font-bold text-slate-200">{lightboxImage.title}</h3>
+                <p className="mt-2 text-slate-500 text-sm">Tap anywhere to close</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </main>
+
+        <nav className="h-20 bg-dark/90 backdrop-blur-xl border-t border-white/5 flex items-center justify-around px-6 pb-2 safe-area-bottom">
+          <NavButton 
+            active={activeTab === 'home'} 
+            icon={<Home strokeWidth={3} />} 
+            label="Home" 
+            onClick={() => setActiveTab('home')} 
+          />
+          <NavButton 
+            active={activeTab === 'map'} 
+            icon={<MapIcon strokeWidth={3} />} 
+            label="Map" 
+            onClick={() => setActiveTab('map')} 
+          />
+          <NavButton 
+            active={activeTab === 'scorecard'} 
+            icon={<ListIcon strokeWidth={3} />} 
+            label="Score" 
+            onClick={() => setActiveTab('scorecard')} 
+          />
+          <NavButton 
+            active={activeTab === 'history'} 
+            icon={<HistoryIcon strokeWidth={3} />} 
+            label="History" 
+            onClick={() => setActiveTab('history')} 
+          />
+        </nav>
+      </div>
+    </APIProvider>
+  );
+}
+
+function NavButton({ active, icon, label, onClick }: { active: boolean; icon: ReactNode; label: string; onClick: () => void }) {
+  return (
+    <button 
+      onClick={onClick}
+      className={`flex flex-col items-center gap-1 transition-all ${active ? 'text-lime scale-110' : 'text-slate-500 hover:text-slate-300'}`}
+    >
+      <div className={active ? 'drop-shadow-[0_0_8px_rgba(191,255,0,0.5)]' : ''}>
+        {icon}
+      </div>
+      <span className={`text-[10px] font-black uppercase tracking-tighter italic ${active ? 'text-lime' : ''}`}>{label}</span>
+    </button>
+  );
+}
