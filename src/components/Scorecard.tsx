@@ -1,5 +1,5 @@
 import { Hole, Round } from '../types';
-import { Trophy, Clock, ChevronRight } from 'lucide-react';
+import { Trophy, Clock } from 'lucide-react';
 
 interface ScorecardProps {
   round: Round;
@@ -68,7 +68,6 @@ export default function Scorecard({ round, holes }: ScorecardProps) {
                 ) : (
                   <p className="text-white/10 font-bold">-</p>
                 )}
-                <ChevronRight size={16} className="text-slate-700" />
               </div>
             </div>
           );

@@ -20,6 +20,7 @@ export default function App() {
   const [tempScore, setTempScore] = useState<number>(4);
   const [lightboxImage, setLightboxImage] = useState<{ url: string; title: string } | null>(null);
   const [showTip, setShowTip] = useState(false);
+  const [selectedHistoryRound, setSelectedHistoryRound] = useState<Round | null>(null);
 
   // Load persistence
   useEffect(() => {
@@ -353,7 +354,10 @@ export default function App() {
                             </p>
                             <p className="text-[10px] uppercase text-slate-500 font-black mt-1">Total strokes</p>
                           </div>
-                          <button className="p-3 bg-white/5 rounded-full text-lime transition-colors hover:bg-lime hover:text-dark">
+                          <button 
+                            onClick={() => setSelectedHistoryRound(round)}
+                            className="p-3 bg-white/5 rounded-full text-lime transition-colors hover:bg-lime hover:text-dark"
+                          >
                             <ChevronRight size={20} />
                           </button>
                         </div>
@@ -395,6 +399,71 @@ export default function App() {
                 </motion.div>
                 <h3 className="mt-6 text-xl font-bold text-slate-200">{lightboxImage.title}</h3>
                 <p className="mt-2 text-slate-500 text-sm">Tap anywhere to close</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Round Detail Modal */}
+          <AnimatePresence>
+            {selectedHistoryRound && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setSelectedHistoryRound(null)}
+                className="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-6"
+              >
+                <motion.div
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.9, opacity: 0 }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-full max-w-md bg-navy/80 rounded-3xl overflow-hidden shadow-2xl border border-slate-700 max-h-[80vh] overflow-y-auto"
+                >
+                  <div className="p-6">
+                    <div className="flex items-center justify-between mb-6">
+                      <div>
+                        <h3 className="text-2xl font-black text-lime uppercase italic tracking-tight">Round Details</h3>
+                        <p className="text-xs text-slate-400 mt-1">{new Date(selectedHistoryRound.date).toLocaleDateString()}</p>
+                      </div>
+                      <button 
+                        onClick={() => setSelectedHistoryRound(null)}
+                        className="p-2 hover:bg-white/10 rounded-lg"
+                      >
+                        <X size={20} />
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      {STREET_GOLF_COURSE.map((hole) => {
+                        const score = selectedHistoryRound.scores[hole.number];
+                        return (
+                          <div 
+                            key={hole.number}
+                            className="flex items-center justify-between p-3 bg-slate-950/50 rounded-xl border border-white/5"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-lime text-dark flex items-center justify-center text-xs font-black italic">
+                                {hole.number}
+                              </div>
+                              <div>
+                                <p className="font-bold text-sm">{hole.name}</p>
+                                <p className="text-[10px] text-slate-500">Par {hole.par}</p>
+                              </div>
+                            </div>
+                            {score ? (
+                              <p className={`text-lg font-[1000] italic ${score.strokes < hole.par ? 'text-lime' : score.strokes > hole.par ? 'text-red-500' : ''}`}>
+                                {score.strokes}
+                              </p>
+                            ) : (
+                              <p className="text-slate-600 font-bold">-</p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </motion.div>
               </motion.div>
             )}
           </AnimatePresence>
