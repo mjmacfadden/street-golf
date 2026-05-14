@@ -71,7 +71,7 @@ function MapHandler({ holes, currentHoleIndex }: { holes: Hole[], currentHoleInd
       // Zoom in with intermediary step to avoid fade effect
       map.setZoom(19);
       setTimeout(() => {
-        map.setZoom(21);
+        map.setZoom(20);
       }, 500);
     } else {
       // Default view: Show full course at zoom level 15

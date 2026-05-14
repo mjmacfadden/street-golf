@@ -10,15 +10,15 @@
   "theme_color": "#BFFF00",
   "icons": [
     {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%23010409'/><circle cx='96' cy='96' r='80' fill='%23BFFF00'/><circle cx='96' cy='96' r='70' fill='%23010409'/><circle cx='96' cy='96' r='8' fill='%23BFFF00'/></svg>",
+      "src": "/icons/icon-192.png",
       "sizes": "192x192",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect fill='%23010409'/><circle cx='256' cy='256' r='200' fill='%23BFFF00'/><circle cx='256' cy='256' r='180' fill='%23010409'/><circle cx='256' cy='256' r='20' fill='%23BFFF00'/></svg>",
+      "src": "/icons/icon-512.png",
       "sizes": "512x512",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ],
