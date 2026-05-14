@@ -68,12 +68,15 @@ function MapHandler({ holes, currentHoleIndex }: { holes: Hole[], currentHoleInd
       
       // Pan to center with smooth animation
       map.panTo({ lat: centerLat, lng: centerLng });
-      // Then zoom in with smooth animation
+      // Zoom in with intermediary step to avoid fade effect
       map.setZoom(19);
+      setTimeout(() => {
+        map.setZoom(21);
+      }, 500);
     } else {
       // Default view: Show full course at zoom level 15
       map.setCenter(holes[0].teeLocation);
-      map.setZoom(15);
+      map.setZoom(18);
     }
   }, [map, holes, currentHoleIndex]);
 
