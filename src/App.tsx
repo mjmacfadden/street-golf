@@ -6,6 +6,7 @@ import MapView from './components/MapView';
 import Scorecard from './components/Scorecard';
 import { STREET_GOLF_COURSE } from './constants/course';
 import { Round, Score } from './types';
+import { getImagePath } from './utils/paths';
 
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_PLATFORM_KEY || '';
 const hasValidKey = Boolean(API_KEY) && API_KEY !== 'YOUR_API_KEY' && API_KEY !== 'MY_MAPS_KEY';
@@ -234,7 +235,7 @@ export default function App() {
                               )}
                               <div 
                                 onClick={() => STREET_GOLF_COURSE[currentHoleIdx].teeImage && setLightboxImage({ 
-                                  url: STREET_GOLF_COURSE[currentHoleIdx].teeImage!, 
+                                  url: getImagePath(STREET_GOLF_COURSE[currentHoleIdx].teeImage!), 
                                   title: `Hole ${STREET_GOLF_COURSE[currentHoleIdx].number} Tee` 
                                 })}
                                 className={`flex gap-2 items-start py-2 px-3 bg-slate-950/50 rounded-xl border border-slate-800 transition-colors ${STREET_GOLF_COURSE[currentHoleIdx].teeImage ? 'cursor-pointer hover:bg-slate-800/80 active:scale-[0.98]' : ''}`}
@@ -250,7 +251,7 @@ export default function App() {
                               </div>
                               <div 
                                 onClick={() => STREET_GOLF_COURSE[currentHoleIdx].pinImage && setLightboxImage({ 
-                                  url: STREET_GOLF_COURSE[currentHoleIdx].pinImage!, 
+                                  url: getImagePath(STREET_GOLF_COURSE[currentHoleIdx].pinImage!), 
                                   title: `Hole ${STREET_GOLF_COURSE[currentHoleIdx].number} Pin` 
                                 })}
                                 className={`flex gap-2 items-start py-2 px-3 bg-dark/50 rounded-xl border border-white/5 transition-colors ${STREET_GOLF_COURSE[currentHoleIdx].pinImage ? 'cursor-pointer hover:bg-navy/80 active:scale-[0.98]' : ''}`}
