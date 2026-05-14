@@ -404,69 +404,61 @@ export default function App() {
           </AnimatePresence>
 
           {/* Round Detail Modal */}
-          <AnimatePresence>
-            {selectedHistoryRound && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={() => setSelectedHistoryRound(null)}
-                className="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-6"
+          {selectedHistoryRound && (
+            <div
+              onClick={() => setSelectedHistoryRound(null)}
+              className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-6"
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-md bg-navy/80 rounded-3xl overflow-hidden shadow-2xl border border-slate-700 max-h-[80vh] overflow-y-auto"
               >
-                <motion.div
-                  initial={{ scale: 0.9, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.9, opacity: 0 }}
-                  onClick={(e) => e.stopPropagation()}
-                  className="w-full max-w-md bg-navy/80 rounded-3xl overflow-hidden shadow-2xl border border-slate-700 max-h-[80vh] overflow-y-auto"
-                >
-                  <div className="p-6">
-                    <div className="flex items-center justify-between mb-6">
-                      <div>
-                        <h3 className="text-2xl font-black text-lime uppercase italic tracking-tight">Round Details</h3>
-                        <p className="text-xs text-slate-400 mt-1">{new Date(selectedHistoryRound.date).toLocaleDateString()}</p>
-                      </div>
-                      <button 
-                        onClick={() => setSelectedHistoryRound(null)}
-                        className="p-2 hover:bg-white/10 rounded-lg"
-                      >
-                        <X size={20} />
-                      </button>
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h3 className="text-2xl font-black text-lime uppercase italic tracking-tight">Round Details</h3>
+                      <p className="text-xs text-slate-400 mt-1">{new Date(selectedHistoryRound.date).toLocaleDateString()}</p>
                     </div>
-
-                    <div className="space-y-3">
-                      {STREET_GOLF_COURSE.map((hole) => {
-                        const score = selectedHistoryRound.scores[hole.number];
-                        return (
-                          <div 
-                            key={hole.number}
-                            className="flex items-center justify-between p-3 bg-slate-950/50 rounded-xl border border-white/5"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-lg bg-lime text-dark flex items-center justify-center text-xs font-black italic">
-                                {hole.number}
-                              </div>
-                              <div>
-                                <p className="font-bold text-sm">{hole.name}</p>
-                                <p className="text-[10px] text-slate-500">Par {hole.par}</p>
-                              </div>
-                            </div>
-                            {score ? (
-                              <p className={`text-lg font-[1000] italic ${score.strokes < hole.par ? 'text-lime' : score.strokes > hole.par ? 'text-red-500' : ''}`}>
-                                {score.strokes}
-                              </p>
-                            ) : (
-                              <p className="text-slate-600 font-bold">-</p>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
+                    <button 
+                      onClick={() => setSelectedHistoryRound(null)}
+                      className="p-2 hover:bg-white/10 rounded-lg"
+                    >
+                      <X size={20} />
+                    </button>
                   </div>
-                </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+
+                  <div className="space-y-3">
+                    {STREET_GOLF_COURSE.map((hole) => {
+                      const score = selectedHistoryRound.scores[hole.number];
+                      return (
+                        <div 
+                          key={hole.number}
+                          className="flex items-center justify-between p-3 bg-slate-950/50 rounded-xl border border-white/5"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-lime text-dark flex items-center justify-center text-xs font-black italic">
+                              {hole.number}
+                            </div>
+                            <div>
+                              <p className="font-bold text-sm">{hole.name}</p>
+                              <p className="text-[10px] text-slate-500">Par {hole.par}</p>
+                            </div>
+                          </div>
+                          {score ? (
+                            <p className={`text-lg font-[1000] italic ${score.strokes < hole.par ? 'text-lime' : score.strokes > hole.par ? 'text-red-500' : ''}`}>
+                              {score.strokes}
+                            </p>
+                          ) : (
+                            <p className="text-slate-600 font-bold">-</p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </main>
 
         <nav className="h-20 bg-dark/90 backdrop-blur-xl border-t border-white/5 flex items-center justify-around px-6 pb-2 safe-area-bottom">
