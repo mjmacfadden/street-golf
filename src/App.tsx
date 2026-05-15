@@ -44,7 +44,8 @@ export default function App() {
       id: Date.now().toString(),
       date: new Date().toISOString(),
       scores: {},
-      isCompleted: false
+      isCompleted: false,
+      courseId: selectedCourse.id
     };
     setCurrentRound(newRound);
     setCurrentHoleIdx(null);
@@ -259,9 +260,9 @@ export default function App() {
                               >
                                 <div className="mt-1 w-2 h-2 rounded-full bg-white border border-green-500 shrink-0" />
                                 <div className="flex-1">
-                                  <p className="text-[10px] text-slate-500 uppercase font-bold tracking-tight flex items-center justify-between">
+                                  {currentCourseHoles[currentHoleIdx].teeImage && <div className="float-right ml-2 mt-1"><ImageIcon size={24} className="text-lime" /></div>}
+                                  <p className="text-[10px] text-slate-500 uppercase font-bold tracking-tight">
                                     Tee
-                                    {currentCourseHoles[currentHoleIdx].teeImage && <ImageIcon size={10} className="text-lime" />}
                                   </p>
                                   <p className="text-xs text-slate-200 font-medium">{currentCourseHoles[currentHoleIdx].teeDescription}</p>
                                 </div>
@@ -275,9 +276,9 @@ export default function App() {
                               >
                                 <div className="mt-1 w-2 h-2 rounded-full bg-lime shrink-0" />
                                 <div className="flex-1">
-                                  <p className="text-[10px] text-slate-500 uppercase font-bold tracking-tight flex items-center justify-between">
+                                  {currentCourseHoles[currentHoleIdx].pinImage && <div className="float-right ml-2 mt-1"><ImageIcon size={24} className="text-lime" /></div>}
+                                  <p className="text-[10px] text-slate-500 uppercase font-bold tracking-tight">
                                     Pin
-                                    {currentCourseHoles[currentHoleIdx].pinImage && <ImageIcon size={10} className="text-lime" />}
                                   </p>
                                   <p className="text-xs text-slate-200 font-medium">{currentCourseHoles[currentHoleIdx].pinDescription}</p>
                                 </div>
@@ -357,11 +358,15 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {history.map(round => (
-                      <div key={round.id} className="bg-navy/50 p-5 rounded-2xl border border-white/5 backdrop-blur-sm transition-all hover:border-lime/30">
+                    {history.map(round => {
+                      const roundCourse = COURSES.find(c => c.id === round.courseId);
+                      return (<div key={round.id} className="bg-navy/50 p-5 rounded-2xl border border-white/5 backdrop-blur-sm transition-all hover:border-lime/30">
                         <div className="flex justify-between items-center mb-3">
-                          <p className="text-xs font-black text-lime uppercase tracking-widest italic">{new Date(round.date).toLocaleDateString()}</p>
-                          <p className="text-white/50 text-[10px] font-black uppercase">9 HOLES</p>
+                          <div>
+                            <p className="text-xs font-black text-lime uppercase tracking-widest italic">{new Date(round.date).toLocaleDateString()}</p>
+                            {roundCourse && <p className="text-[10px] text-slate-400 uppercase tracking-wider mt-1">{roundCourse.name}</p>}
+                          </div>
+                          <p className="text-white/50 text-[10px] font-black uppercase">{roundCourse?.holes.length ?? 9} HOLES</p>
                         </div>
                         <div className="flex justify-between items-center">
                           <div>
@@ -377,8 +382,8 @@ export default function App() {
                             <ChevronRight size={20} />
                           </button>
                         </div>
-                      </div>
-                    ))}
+                      </div>);
+                    })}
                   </div>
                 )}
               </motion.div>
@@ -434,6 +439,10 @@ export default function App() {
                     <div>
                       <h3 className="text-2xl font-black text-lime uppercase italic tracking-tight">Round Details</h3>
                       <p className="text-xs text-slate-400 mt-1">{new Date(selectedHistoryRound.date).toLocaleDateString()}</p>
+                      {(() => {
+                        const roundCourse = COURSES.find(c => c.id === selectedHistoryRound.courseId);
+                        return roundCourse && <p className="text-xs text-slate-500 mt-1">{roundCourse.name}</p>;
+                      })()}
                     </div>
                     <button 
                       onClick={() => setSelectedHistoryRound(null)}
@@ -444,32 +453,35 @@ export default function App() {
                   </div>
 
                   <div className="space-y-3">
-                    {STREET_GOLF_COURSE.map((hole) => {
-                      const score = selectedHistoryRound.scores[hole.number];
-                      return (
-                        <div 
-                          key={hole.number}
-                          className="flex items-center justify-between p-3 bg-slate-950/50 rounded-xl border border-white/5"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-lime text-dark flex items-center justify-center text-xs font-black italic">
-                              {hole.number}
+                    {(() => {
+                      const roundCourse = COURSES.find(c => c.id === selectedHistoryRound.courseId) || COURSES[0];
+                      return roundCourse.holes.map((hole) => {
+                        const score = selectedHistoryRound.scores[hole.number];
+                        return (
+                          <div 
+                            key={hole.number}
+                            className="flex items-center justify-between p-3 bg-slate-950/50 rounded-xl border border-white/5"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-lime text-dark flex items-center justify-center text-xs font-black italic">
+                                {hole.number}
+                              </div>
+                              <div>
+                                <p className="font-bold text-sm">{hole.name}</p>
+                                <p className="text-[10px] text-slate-500">Par {hole.par}</p>
+                              </div>
                             </div>
-                            <div>
-                              <p className="font-bold text-sm">{hole.name}</p>
-                              <p className="text-[10px] text-slate-500">Par {hole.par}</p>
-                            </div>
+                            {score ? (
+                              <p className={`text-lg font-[1000] italic ${score.strokes < hole.par ? 'text-lime' : score.strokes > hole.par ? 'text-red-500' : ''}`}>
+                                {score.strokes}
+                              </p>
+                            ) : (
+                              <p className="text-slate-600 font-bold">-</p>
+                            )}
                           </div>
-                          {score ? (
-                            <p className={`text-lg font-[1000] italic ${score.strokes < hole.par ? 'text-lime' : score.strokes > hole.par ? 'text-red-500' : ''}`}>
-                              {score.strokes}
-                            </p>
-                          ) : (
-                            <p className="text-slate-600 font-bold">-</p>
-                          )}
-                        </div>
-                      );
-                    })}
+                        );
+                      });
+                    })()}
                   </div>
                 </div>
               </div>
