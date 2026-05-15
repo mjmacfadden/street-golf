@@ -4,7 +4,7 @@ import { Map as MapIcon, List as ListIcon, History as HistoryIcon, Play, Chevron
 import { motion, AnimatePresence } from 'motion/react';
 import MapView from './components/MapView';
 import Scorecard from './components/Scorecard';
-import { STREET_GOLF_COURSE } from './constants/course';
+import { STREET_GOLF_COURSE, COURSES, type Course } from './constants/course';
 import { Round, Score } from './types';
 import { getImagePath } from './utils/paths';
 
@@ -13,6 +13,8 @@ const hasValidKey = Boolean(API_KEY) && API_KEY !== 'YOUR_API_KEY' && API_KEY !=
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'home' | 'map' | 'scorecard' | 'history'>('home');
+  const [selectedCourse, setSelectedCourse] = useState<Course>(COURSES[0]);
+  const currentCourseHoles = selectedCourse.holes;
   const [currentHoleIdx, setCurrentHoleIdx] = useState<number | null>(null);
   const [isCardCollapsed, setIsCardCollapsed] = useState(false);
   const [currentRound, setCurrentRound] = useState<Round | null>(null);
@@ -50,14 +52,14 @@ export default function App() {
     // Wait 1.5 seconds then zoom to hole 1 over 2 seconds
     setTimeout(() => {
       setCurrentHoleIdx(0);
-      setTempScore(STREET_GOLF_COURSE[0].par);
+      setTempScore(currentCourseHoles[0].par);
     }, 1500);
   };
 
   const handleSaveScore = () => {
     if (!currentRound || currentHoleIdx === null) return;
     
-    const holeNum = STREET_GOLF_COURSE[currentHoleIdx].number;
+    const holeNum = currentCourseHoles[currentHoleIdx].number;
     const newScores = {
       ...currentRound.scores,
       [holeNum]: { strokes: tempScore }
@@ -66,10 +68,10 @@ export default function App() {
     setCurrentRound({ ...currentRound, scores: newScores });
     
     // Move to next hole or scorecard if finished
-    if (currentHoleIdx < STREET_GOLF_COURSE.length - 1) {
+    if (currentHoleIdx < currentCourseHoles.length - 1) {
       const nextIdx = currentHoleIdx + 1;
       setCurrentHoleIdx(nextIdx);
-      setTempScore(STREET_GOLF_COURSE[nextIdx].par);
+      setTempScore(currentCourseHoles[nextIdx].par);
     } else {
       setActiveTab('scorecard');
     }
@@ -127,17 +129,31 @@ export default function App() {
                   </h1>
                 </div>
                 
-                <p className="text-slate-400 mb-12 text-lg max-w-[300px] font-bold leading-tight uppercase tracking-tight">
-                  THE SOUTHBRIDGE OPEN <span className="block text-lime/50 text-sm mt-1">EST. 2024</span>
-                </p>
-                
-                <button 
-                  onClick={startNewRound}
-                  className="group relative flex items-center gap-3 bg-lime text-dark px-8 py-4 rounded-2xl font-[1000] text-xl transition-all hover:scale-105 active:scale-95 shadow-[0_15px_35px_rgba(191,255,0,0.25)] italic border-b-4 border-lime-700 whitespace-nowrap"
-                >
-                  <Play fill="currentColor" size={20} />
-                  START ROUND
-                </button>
+                <div className="w-full max-w-xs space-y-4">
+                  <div>
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 block">Select Course</label>
+                    <select 
+                      value={selectedCourse.id}
+                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedCourse(COURSES.find(c => c.id === e.target.value) || COURSES[0])}
+                      className="w-full px-4 py-3 bg-navy/50 border border-lime/30 rounded-lg text-lime font-bold text-center cursor-pointer hover:bg-navy/70 transition-colors"
+                    >
+                      {COURSES.map(course => (
+                        <option key={course.id} value={course.id} className="bg-dark text-lime">
+                          {course.name}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-slate-500 mt-2">{selectedCourse.location}</p>
+                  </div>
+                  
+                  <button 
+                    onClick={startNewRound}
+                    className="w-full group relative flex items-center justify-center gap-3 bg-lime text-dark px-8 py-4 rounded-2xl font-[1000] text-xl transition-all hover:scale-105 active:scale-95 shadow-[0_15px_35px_rgba(191,255,0,0.25)] italic border-b-4 border-lime-700"
+                  >
+                    <Play fill="currentColor" size={20} />
+                    START ROUND
+                  </button>
+                </div>
               </motion.div>
             )}
 
@@ -150,7 +166,7 @@ export default function App() {
                 className="h-full w-full relative"
               >
                 <MapView 
-                  holes={STREET_GOLF_COURSE} 
+                  holes={currentCourseHoles} 
                   currentHoleIndex={currentHoleIdx}
                   onMarkerClick={(idx) => setCurrentHoleIdx(idx)}
                 />
@@ -168,23 +184,23 @@ export default function App() {
                       >
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full bg-lime text-dark flex items-center justify-center font-black text-sm italic">
-                            {STREET_GOLF_COURSE[currentHoleIdx].number}
+                            {currentCourseHoles[currentHoleIdx].number}
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
-                              <h3 className="font-black text-sm leading-none uppercase italic tracking-tight">{STREET_GOLF_COURSE[currentHoleIdx].name}</h3>
+                              <h3 className="font-black text-sm leading-none uppercase italic tracking-tight">{currentCourseHoles[currentHoleIdx].name}</h3>
                               <button 
                                 onClick={(e) => { e.stopPropagation(); setShowTip(!showTip); }}
                                 className="text-lime hover:text-lime/80 transition-colors"
                               >
                                 <Info size={14} />
                               </button>
-                              {STREET_GOLF_COURSE[currentHoleIdx].hazard && (
+                              {currentCourseHoles[currentHoleIdx].hazard && (
                                 <AlertTriangle size={14} className="text-white" />
                               )}
                             </div>
                             <p className="text-[10px] text-lime font-black uppercase mt-1 tracking-wider inline-flex items-center gap-2 italic">
-                               PAR {STREET_GOLF_COURSE[currentHoleIdx].par}
+                               PAR {currentCourseHoles[currentHoleIdx].par}
                             </p>
                           </div>
                         </div>
@@ -198,8 +214,8 @@ export default function App() {
                                <ChevronLeft size={20} />
                              </button>
                              <button 
-                               disabled={currentHoleIdx === STREET_GOLF_COURSE.length - 1}
-                               onClick={(e) => { e.stopPropagation(); setCurrentHoleIdx(Math.min(STREET_GOLF_COURSE.length - 1, currentHoleIdx + 1)); }}
+                               disabled={currentHoleIdx === currentCourseHoles.length - 1}
+                               onClick={(e) => { e.stopPropagation(); setCurrentHoleIdx(Math.min(currentCourseHoles.length - 1, currentHoleIdx + 1)); }}
                                className="p-2 text-slate-400 hover:text-white disabled:opacity-30"
                              >
                                <ChevronRight size={20} />
@@ -231,39 +247,39 @@ export default function App() {
                                   exit={{ opacity: 0, y: -10 }}
                                   className="bg-navy/60 border border-lime/30 rounded-lg p-3 text-sm text-slate-200 italic leading-relaxed"
                                 >
-                                  {STREET_GOLF_COURSE[currentHoleIdx].tip}
+                                  {currentCourseHoles[currentHoleIdx].tip}
                                 </motion.div>
                               )}
                               <div 
-                                onClick={() => STREET_GOLF_COURSE[currentHoleIdx].teeImage && setLightboxImage({ 
-                                  url: getImagePath(STREET_GOLF_COURSE[currentHoleIdx].teeImage!), 
-                                  title: `Hole ${STREET_GOLF_COURSE[currentHoleIdx].number} Tee` 
+                                onClick={() => currentCourseHoles[currentHoleIdx].teeImage && setLightboxImage({ 
+                                  url: getImagePath(currentCourseHoles[currentHoleIdx].teeImage!), 
+                                  title: `Hole ${currentCourseHoles[currentHoleIdx].number} Tee` 
                                 })}
-                                className={`flex gap-2 items-start py-2 px-3 bg-slate-950/50 rounded-xl border border-slate-800 transition-colors ${STREET_GOLF_COURSE[currentHoleIdx].teeImage ? 'cursor-pointer hover:bg-slate-800/80 active:scale-[0.98]' : ''}`}
+                                className={`flex gap-2 items-start py-2 px-3 bg-slate-950/50 rounded-xl border border-slate-800 transition-colors ${currentCourseHoles[currentHoleIdx].teeImage ? 'cursor-pointer hover:bg-slate-800/80 active:scale-[0.98]' : ''}`}
                               >
                                 <div className="mt-1 w-2 h-2 rounded-full bg-white border border-green-500 shrink-0" />
                                 <div className="flex-1">
                                   <p className="text-[10px] text-slate-500 uppercase font-bold tracking-tight flex items-center justify-between">
                                     Tee
-                                    {STREET_GOLF_COURSE[currentHoleIdx].teeImage && <ImageIcon size={10} className="text-lime" />}
+                                    {currentCourseHoles[currentHoleIdx].teeImage && <ImageIcon size={10} className="text-lime" />}
                                   </p>
-                                  <p className="text-xs text-slate-200 font-medium">{STREET_GOLF_COURSE[currentHoleIdx].teeDescription}</p>
+                                  <p className="text-xs text-slate-200 font-medium">{currentCourseHoles[currentHoleIdx].teeDescription}</p>
                                 </div>
                               </div>
                               <div 
-                                onClick={() => STREET_GOLF_COURSE[currentHoleIdx].pinImage && setLightboxImage({ 
-                                  url: getImagePath(STREET_GOLF_COURSE[currentHoleIdx].pinImage!), 
-                                  title: `Hole ${STREET_GOLF_COURSE[currentHoleIdx].number} Pin` 
+                                onClick={() => currentCourseHoles[currentHoleIdx].pinImage && setLightboxImage({ 
+                                  url: getImagePath(currentCourseHoles[currentHoleIdx].pinImage!), 
+                                  title: `Hole ${currentCourseHoles[currentHoleIdx].number} Pin` 
                                 })}
-                                className={`flex gap-2 items-start py-2 px-3 bg-dark/50 rounded-xl border border-white/5 transition-colors ${STREET_GOLF_COURSE[currentHoleIdx].pinImage ? 'cursor-pointer hover:bg-navy/80 active:scale-[0.98]' : ''}`}
+                                className={`flex gap-2 items-start py-2 px-3 bg-dark/50 rounded-xl border border-white/5 transition-colors ${currentCourseHoles[currentHoleIdx].pinImage ? 'cursor-pointer hover:bg-navy/80 active:scale-[0.98]' : ''}`}
                               >
                                 <div className="mt-1 w-2 h-2 rounded-full bg-lime shrink-0" />
                                 <div className="flex-1">
                                   <p className="text-[10px] text-slate-500 uppercase font-bold tracking-tight flex items-center justify-between">
                                     Pin
-                                    {STREET_GOLF_COURSE[currentHoleIdx].pinImage && <ImageIcon size={10} className="text-lime" />}
+                                    {currentCourseHoles[currentHoleIdx].pinImage && <ImageIcon size={10} className="text-lime" />}
                                   </p>
-                                  <p className="text-xs text-slate-200 font-medium">{STREET_GOLF_COURSE[currentHoleIdx].pinDescription}</p>
+                                  <p className="text-xs text-slate-200 font-medium">{currentCourseHoles[currentHoleIdx].pinDescription}</p>
                                 </div>
                               </div>
 
@@ -311,7 +327,7 @@ export default function App() {
                 exit={{ x: -100, opacity: 0 }}
                 className="h-full overflow-y-auto bg-dark"
               >
-                <Scorecard round={currentRound} holes={STREET_GOLF_COURSE} />
+                <Scorecard round={currentRound} holes={currentCourseHoles} />
                 <div className="p-4 bg-dark/80 backdrop-blur-lg border-t border-white/5 fixed bottom-20 sm:bottom-20 left-0 right-0 md:bottom-20">
                   <button 
                     onClick={finishRound}

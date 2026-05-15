@@ -1,5 +1,12 @@
 import { Hole } from '../types';
 
+export interface Course {
+  id: string;
+  name: string;
+  location: string;
+  holes: Hole[];
+}
+
 export const STREET_GOLF_COURSE: Hole[] = [
   {
     number: 1,
@@ -117,5 +124,88 @@ export const STREET_GOLF_COURSE: Hole[] = [
     par: 5,
     tip: "One last push to the clubhouse. You've finished the Southbridge Open!",
     hazard: false
+  }
+];
+
+export const GLENBROOK_OPEN: Hole[] = [
+  {
+    number: 1,
+    name: "Lake Avenue Launch",
+    teeLocation: { lat: 42.089747, lng: -87.851036 },
+    teeDescription: "Starting point at Lake Avenue",
+    teeImage: "/images/glenbrook/tees/tee-1.jpeg",
+    pinLocation: { lat: 42.089911, lng: -87.850967 },
+    pinDescription: "Opening pin to the east",
+    pinImage: "/images/glenbrook/pins/pin-1.jpeg",
+    par: 3,
+    tip: "A short warm-up hole to start your Glenbrook experience.",
+    hazard: false,
+  },
+  {
+    number: 2,
+    name: "Glenbrook Glide",
+    teeLocation: { lat: 42.089972, lng: -87.850906 },
+    teeDescription: "North of Lake Avenue",
+    teeImage: "/images/glenbrook/tees/tee-2.jpeg",
+    pinLocation: { lat: 42.090108, lng: -87.850892 },
+    pinDescription: "Moving north approach",
+    pinImage: "/images/glenbrook/pins/pin-2.jpeg",
+    par: 4,
+    tip: "Moving north, this is a steady approach.",
+    hazard: false,
+  },
+  {
+    number: 3,
+    name: "Meadow Stretch",
+    teeLocation: { lat: 42.090161, lng: -87.850953 },
+    teeDescription: "Meadow area east",
+    teeImage: "/images/glenbrook/tees/tee-3.jpeg",
+    pinLocation: { lat: 42.090286, lng: -87.851250 },
+    pinDescription: "Meadow opening",
+    pinImage: "/images/glenbrook/pins/pin-3.jpeg",
+    par: 4,
+    tip: "Head east through the open spaces.",
+    hazard: false,
+  },
+  {
+    number: 4,
+    name: "Crescent Crossing",
+    teeLocation: { lat: 42.090289, lng: -87.851250 },
+    teeDescription: "Crescent path area",
+    teeImage: "/images/glenbrook/tees/tee-4.jpeg",
+    pinLocation: { lat: 42.090450, lng: -87.851333 },
+    pinDescription: "Crescent path end",
+    pinImage: "/images/glenbrook/pins/pin-4.jpeg",
+    par: 4,
+    tip: "Navigate the crescent trail.",
+    hazard: false,
+  },
+  {
+    number: 5,
+    name: "Glenbrook Gardens",
+    teeLocation: { lat: 42.090461, lng: -87.851386 },
+    teeDescription: "Garden section south",
+    teeImage: "/images/glenbrook/tees/tee-5.jpeg",
+    pinLocation: { lat: 42.090642, lng: -87.851653 },
+    pinDescription: "Garden pin",
+    pinImage: "/images/glenbrook/pins/pin-5.jpeg",
+    par: 3,
+    tip: "A short pitch through the garden areas.",
+    hazard: false,
+  }
+];
+
+export const COURSES: Course[] = [
+  {
+    id: 'southbridge',
+    name: 'The Southbridge Open',
+    location: 'Southbridge Lane, Glendale',
+    holes: STREET_GOLF_COURSE
+  },
+  {
+    id: 'glenbrook',
+    name: 'The Glenbrook Open',
+    location: '4000 W Lake Ave, Glenview, IL 60026',
+    holes: GLENBROOK_OPEN
   }
 ];
