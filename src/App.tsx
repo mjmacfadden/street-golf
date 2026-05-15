@@ -329,7 +329,7 @@ export default function App() {
                 className="h-full overflow-y-auto bg-dark"
               >
                 <Scorecard round={currentRound} holes={currentCourseHoles} />
-                <div className="p-4 bg-dark/80 backdrop-blur-lg border-t border-white/5 fixed bottom-20 sm:bottom-20 left-0 right-0 md:bottom-20">
+                <div className="p-4 bg-dark border-t border-white/5">
                   <button 
                     onClick={finishRound}
                     className="w-full bg-lime text-dark py-4 rounded-xl font-black flex items-center justify-center gap-2 shadow-xl shadow-lime/10 italic"
