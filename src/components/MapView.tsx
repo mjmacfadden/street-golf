@@ -56,8 +56,10 @@ function MapHandler({ holes, currentHoleIndex }: { holes: Hole[], currentHoleInd
   }, [map, mapsLib, holes, currentHoleIndex]);
 
   // Center on current hole or whole course
+  const prevHoleIndexRef = useRef<number | null>(null);
+  
   useEffect(() => {
-    if (!map || holes.length === 0) return;
+    if (!map || holes.length === 0 || !mapsLib) return;
 
     if (currentHoleIndex !== null) {
       // Calculate center and zoom for the hole
@@ -66,19 +68,30 @@ function MapHandler({ holes, currentHoleIndex }: { holes: Hole[], currentHoleInd
       const centerLat = (tee.lat + pin.lat) / 2;
       const centerLng = (tee.lng + pin.lng) / 2;
       
-      // Pan to center with smooth animation
-      map.panTo({ lat: centerLat, lng: centerLng });
-      // Zoom in with intermediary step to avoid fade effect
-      map.setZoom(19);
-      setTimeout(() => {
-        map.setZoom(20);
-      }, 500);
+      // Only zoom with animation when transitioning from whole course to hole 1
+      if (prevHoleIndexRef.current === null && currentHoleIndex === 0) {
+        // Animate zoom in from whole course view
+        map.setZoom(19);
+        setTimeout(() => {
+          map.panTo({ lat: centerLat, lng: centerLng });
+          map.setZoom(20);
+        }, 200);
+      } else {
+        // For other transitions, smoothly pan and zoom to the hole
+        // Use fitBounds with a small buffer for smooth animation
+        const bounds = new mapsLib.LatLngBounds();
+        bounds.extend(tee);
+        bounds.extend(pin);
+        map.fitBounds(bounds, { top: 100, right: 100, bottom: 100, left: 100 });
+      }
     } else {
       // Default view: Show full course at zoom level 15
       map.setCenter(holes[0].teeLocation);
       map.setZoom(18);
     }
-  }, [map, holes, currentHoleIndex]);
+    
+    prevHoleIndexRef.current = currentHoleIndex;
+  }, [map, holes, currentHoleIndex, mapsLib]);
 
   return null;
 }

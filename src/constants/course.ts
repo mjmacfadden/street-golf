@@ -30,10 +30,10 @@ export const STREET_GOLF_COURSE: Hole[] = [
   {
     number: 3,
     name: "Butternut Ascent",
-    teeLocation: { lat: 42.13781, lng: -87.82276 },
+    teeLocation: { lat: 42.114383, lng: -87.836008 },
     teeDescription: "Hydrant at Glendale & Butternut",
     teeImage: "https://images.unsplash.com/photo-1475147817452-9da50785160b?q=80&w=800&auto=format&fit=crop",
-    pinLocation: { lat: 42.13876, lng: -87.82276 },
+    pinLocation: { lat: 42.11386, lng: -87.83617 },
     pinDescription: "Lamp post midway up Butternut Ln",
     pinImage: "https://images.unsplash.com/photo-1493246507139-91e8bef99c02?q=80&w=800&auto=format&fit=crop",
     par: 4,
