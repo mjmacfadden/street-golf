@@ -156,7 +156,7 @@ export default function App() {
                 />
 
                 {currentHoleIdx !== null && (
-                  <div className="absolute bottom-6 left-4 right-4 z-10">
+                  <div className="absolute bottom-32 sm:bottom-6 left-4 right-4 z-10">
                     <motion.div 
                       initial={{ y: 50, opacity: 0 }}
                       animate={{ y: 0, opacity: 1 }}
@@ -312,7 +312,7 @@ export default function App() {
                 className="h-full overflow-y-auto bg-dark"
               >
                 <Scorecard round={currentRound} holes={STREET_GOLF_COURSE} />
-                <div className="p-4 bg-dark/80 backdrop-blur-lg border-t border-white/5 fixed bottom-20 left-0 right-0">
+                <div className="p-4 bg-dark/80 backdrop-blur-lg border-t border-white/5 fixed bottom-20 sm:bottom-20 left-0 right-0 md:bottom-20">
                   <button 
                     onClick={finishRound}
                     className="w-full bg-lime text-dark py-4 rounded-xl font-black flex items-center justify-center gap-2 shadow-xl shadow-lime/10 italic"
@@ -329,7 +329,7 @@ export default function App() {
                 key="history"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="h-full p-6 overflow-y-auto pb-24 bg-dark"
+                className="h-full p-6 overflow-y-auto pb-32 sm:pb-24 bg-dark"
               >
                 <h2 className="text-3xl font-[900] mb-8 flex items-center gap-3 uppercase italic tracking-tighter">
                   <HistoryIcon size={32} className="text-lime" />
@@ -461,7 +461,7 @@ export default function App() {
           )}
         </main>
 
-        <nav className="h-20 bg-dark/90 backdrop-blur-xl border-t border-white/5 flex items-center justify-around px-6 pb-2 safe-area-bottom">
+        <nav className="h-24 sm:h-20 bg-dark/90 backdrop-blur-xl border-t border-white/5 flex items-center justify-around px-6 safe-area-bottom">
           <NavButton 
             active={activeTab === 'home'} 
             icon={<Home strokeWidth={3} />} 

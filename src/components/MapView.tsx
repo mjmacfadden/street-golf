@@ -79,7 +79,7 @@ function MapHandler({ holes, currentHoleIndex }: { holes: Hole[], currentHoleInd
       } else {
         // For other transitions, smoothly pan and zoom to the hole
         // Use fitBounds with a small buffer for smooth animation
-        const bounds = new mapsLib.LatLngBounds();
+        const bounds = new google.maps.LatLngBounds();
         bounds.extend(tee);
         bounds.extend(pin);
         map.fitBounds(bounds, { top: 100, right: 100, bottom: 100, left: 100 });

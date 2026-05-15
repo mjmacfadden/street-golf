@@ -29,6 +29,19 @@ body {
   box-shadow: 0 0 20px rgba(191,255,0,0.3);
 }
 
+/* Safe area support for notched devices */
+.safe-area-bottom {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+/* Ensure content doesn't hide behind browser UI on mobile */
+@supports (padding: max(0px)) {
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
 /* Custom scrollbar for dark theme */
 ::-webkit-scrollbar {
   width: 6px;
