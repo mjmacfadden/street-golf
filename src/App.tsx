@@ -1,10 +1,14 @@
 import { useState, useEffect, ReactNode } from 'react';
 import { APIProvider } from '@vis.gl/react-google-maps';
-import { Map as MapIcon, List as ListIcon, History as HistoryIcon, Play, ChevronLeft, ChevronRight, Pencil, Flag, Trophy, Image as ImageIcon, X, Home, Info, AlertTriangle, Hammer } from 'lucide-react';
+import { Map as MapIcon, List as ListIcon, History as HistoryIcon, Play, ChevronLeft, ChevronRight, Pencil, Flag, Trophy, Image as ImageIcon, X, Home, Info, AlertTriangle, Hammer, LogOut, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import MapView from './components/MapView';
 import Scorecard from './components/Scorecard';
 import CourseBuilder from './components/CourseBuilder';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthModal } from './components/AuthModal';
+import { getPublishedCourses, getUserCourses } from './utils/courseService';
+import type { Course as FirestoreCourse } from './utils/courseService';
 import { STREET_GOLF_COURSE, COURSES, type Course } from './constants/course';
 import { Round, Score } from './types';
 import { getImagePath } from './utils/paths';
@@ -13,8 +17,25 @@ const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_M
 const hasValidKey = Boolean(API_KEY) && API_KEY !== 'YOUR_API_KEY' && API_KEY !== 'MY_MAPS_KEY';
 
 export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  );
+}
+
+function AppContent() {
+  const { currentUser, loading } = useAuth();
   const [activeTab, setActiveTab] = useState<'home' | 'map' | 'scorecard' | 'history' | 'builder'>('home');
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  
+  // Courses
+  const [availableCourses, setAvailableCourses] = useState<Course[]>(COURSES);
+  const [coursesLoading, setCoursesLoading] = useState(true);
+  const [coursesError, setCoursesError] = useState<string | null>(null);
   const [selectedCourse, setSelectedCourse] = useState<Course>(COURSES[0]);
+  
   const currentCourseHoles = selectedCourse.holes;
   const [currentHoleIdx, setCurrentHoleIdx] = useState<number | null>(null);
   const [isCardCollapsed, setIsCardCollapsed] = useState(false);
@@ -24,6 +45,86 @@ export default function App() {
   const [lightboxImage, setLightboxImage] = useState<{ url: string; title: string } | null>(null);
   const [showTip, setShowTip] = useState(false);
   const [selectedHistoryRound, setSelectedHistoryRound] = useState<Round | null>(null);
+
+  // Convert Firestore course to local Course format
+  const convertFirestoreCourse = (fsCourse: FirestoreCourse): Course => {
+    return {
+      id: fsCourse.id,
+      name: fsCourse.courseName,
+      location: 'User Created Course',
+      holes: fsCourse.holes.map((hole, idx) => ({
+        number: idx + 1,
+        name: hole.name,
+        teeLocation: hole.teeLocation,
+        teeDescription: hole.teeDescription,
+        teeImage: hole.teeImage || undefined,
+        pinLocation: hole.pinLocation,
+        pinDescription: hole.pinDescription,
+        pinImage: hole.pinImage || undefined,
+        par: hole.par,
+        tip: hole.tip,
+        hazard: hole.hazard,
+      })),
+    };
+  };
+
+  // Fetch courses from Firestore
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        setCoursesLoading(true);
+        setCoursesError(null);
+
+        // Start with default courses
+        let courses: Course[] = COURSES;
+
+        // Fetch published courses
+        try {
+          const publishedCourses = await getPublishedCourses();
+          const converted = publishedCourses.map(convertFirestoreCourse);
+          courses = [...COURSES, ...converted];
+        } catch (err) {
+          console.warn('Failed to fetch published courses:', err);
+        }
+
+        // Fetch user's own courses (if signed in)
+        if (currentUser) {
+          try {
+            const userCourses = await getUserCourses(currentUser.uid);
+            const converted = userCourses.map(convertFirestoreCourse);
+            // Add user courses that aren't already in the list
+            courses = [
+              ...COURSES,
+              ...converted,
+            ];
+          } catch (err) {
+            console.warn('Failed to fetch user courses:', err);
+          }
+        }
+
+        setAvailableCourses(courses);
+      } catch (error) {
+        console.error('Error fetching courses:', error);
+        setCoursesError('Failed to load courses');
+        // Keep default courses available
+        setAvailableCourses(COURSES);
+      } finally {
+        setCoursesLoading(false);
+      }
+    };
+
+    // Only fetch if we've finished loading auth state
+    if (!loading) {
+      fetchCourses();
+    }
+  }, [currentUser, loading]);
+
+  // Ensure selectedCourse is valid when availableCourses changes
+  useEffect(() => {
+    if (!availableCourses.find(c => c.id === selectedCourse.id)) {
+      setSelectedCourse(availableCourses[0] || COURSES[0]);
+    }
+  }, [availableCourses]);
 
   // Load persistence
   useEffect(() => {
@@ -108,6 +209,17 @@ export default function App() {
     );
   }
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-dark">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-lime/20 border-t-lime rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-slate-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <APIProvider apiKey={API_KEY} version="weekly">
       <div className="h-screen flex flex-col bg-dark text-slate-100 overflow-hidden font-sans italic-font-fix">
@@ -134,18 +246,27 @@ export default function App() {
                 <div className="w-full max-w-xs space-y-4">
                   <div>
                     <label className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 block">Select Course</label>
-                    <select 
-                      value={selectedCourse.id}
-                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedCourse(COURSES.find(c => c.id === e.target.value) || COURSES[0])}
-                      className="w-full px-4 py-3 bg-navy/50 border border-lime/30 rounded-lg text-lime font-bold text-center cursor-pointer hover:bg-navy/70 transition-colors"
-                    >
-                      {COURSES.map(course => (
-                        <option key={course.id} value={course.id} className="bg-dark text-lime">
-                          {course.name}
-                        </option>
-                      ))}
-                    </select>
+                    {coursesLoading ? (
+                      <div className="w-full px-4 py-3 bg-navy/50 border border-lime/30 rounded-lg text-lime/60 font-bold text-center">
+                        Loading courses...
+                      </div>
+                    ) : (
+                      <select 
+                        value={selectedCourse.id}
+                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedCourse(availableCourses.find(c => c.id === e.target.value) || availableCourses[0])}
+                        className="w-full px-4 py-3 bg-navy/50 border border-lime/30 rounded-lg text-lime font-bold text-center cursor-pointer hover:bg-navy/70 transition-colors"
+                      >
+                        {availableCourses.map(course => (
+                          <option key={course.id} value={course.id} className="bg-dark text-lime">
+                            {course.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                     <p className="text-xs text-slate-500 mt-2">{selectedCourse.location}</p>
+                    {coursesError && (
+                      <p className="text-xs text-red-400 mt-1">{coursesError}</p>
+                    )}
                   </div>
                   
                   <button 
@@ -382,12 +503,20 @@ export default function App() {
             )}
 
             {activeTab === 'builder' && (
-              <div 
+              <motion.div 
+                key="builder"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
                 className="h-full overflow-y-auto scroll-smooth"
                 style={{ WebkitOverflowScrolling: 'touch' }}
               >
-                <CourseBuilder />
-              </div>
+                {currentUser ? (
+                  <CourseBuilder />
+                ) : (
+                  <AuthModal onClose={() => setActiveTab('home')} />
+                )}
+              </motion.div>
             )}
           </AnimatePresence>
 
@@ -490,38 +619,79 @@ export default function App() {
           )}
         </main>
 
-        <nav className="fixed bottom-0 left-0 right-0 h-24 sm:h-20 bg-dark/90 backdrop-blur-xl border-t border-white/5 flex items-center justify-around px-6 z-40" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
-          <NavButton 
-            active={activeTab === 'home'} 
-            icon={<Home strokeWidth={3} />} 
-            label="Home" 
-            onClick={() => setActiveTab('home')} 
-          />
-          <NavButton 
-            active={activeTab === 'map'} 
-            icon={<MapIcon strokeWidth={3} />} 
-            label="Map" 
-            onClick={() => setActiveTab('map')} 
-          />
-          <NavButton 
-            active={activeTab === 'scorecard'} 
-            icon={<ListIcon strokeWidth={3} />} 
-            label="Score" 
-            onClick={() => setActiveTab('scorecard')} 
-          />
-          <NavButton 
-            active={activeTab === 'builder'} 
-            icon={<Hammer strokeWidth={3} />} 
-            label="Build" 
-            onClick={() => setActiveTab('builder')} 
-          />
-          <NavButton 
-            active={activeTab === 'history'} 
-            icon={<HistoryIcon strokeWidth={3} />} 
-            label="History" 
-            onClick={() => setActiveTab('history')} 
-          />
+        <nav className="fixed bottom-0 left-0 right-0 h-24 sm:h-20 bg-dark/90 backdrop-blur-xl border-t border-white/5 flex items-center justify-between px-6 z-40" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
+          <div className="flex items-center justify-around flex-1">
+            <NavButton 
+              active={activeTab === 'home'} 
+              icon={<Home strokeWidth={3} />} 
+              label="Home" 
+              onClick={() => setActiveTab('home')} 
+            />
+            <NavButton 
+              active={activeTab === 'map'} 
+              icon={<MapIcon strokeWidth={3} />} 
+              label="Map" 
+              onClick={() => setActiveTab('map')} 
+            />
+            <NavButton 
+              active={activeTab === 'scorecard'} 
+              icon={<ListIcon strokeWidth={3} />} 
+              label="Score" 
+              onClick={() => setActiveTab('scorecard')} 
+            />
+            <NavButton 
+              active={activeTab === 'builder'} 
+              icon={<Hammer strokeWidth={3} />} 
+              label="Build" 
+              onClick={() => {
+                if (!currentUser) {
+                  setShowAuthModal(true);
+                } else {
+                  setActiveTab('builder');
+                }
+              }} 
+            />
+            <NavButton 
+              active={activeTab === 'history'} 
+              icon={<HistoryIcon strokeWidth={3} />} 
+              label="History" 
+              onClick={() => setActiveTab('history')} 
+            />
+          </div>
+
+          {/* User Profile Button */}
+          <div className="relative">
+            <button
+              onClick={() => setUserMenuOpen(!userMenuOpen)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
+                currentUser
+                  ? 'bg-lime/20 text-lime hover:bg-lime/30'
+                  : 'text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              <User size={20} strokeWidth={2.5} />
+              {currentUser && (
+                <span className="text-xs font-bold uppercase hidden sm:inline">
+                  {currentUser.displayName?.split(' ')[0] || 'User'}
+                </span>
+              )}
+            </button>
+
+            {/* User Menu Dropdown */}
+            {userMenuOpen && (
+              <UserMenuDropdown 
+                currentUser={currentUser}
+                onClose={() => setUserMenuOpen(false)}
+                onShowAuth={() => setShowAuthModal(true)}
+              />
+            )}
+          </div>
         </nav>
+
+        {/* Auth Modal */}
+        {showAuthModal && (
+          <AuthModal onClose={() => setShowAuthModal(false)} />
+        )}
       </div>
     </APIProvider>
   );
@@ -538,5 +708,57 @@ function NavButton({ active, icon, label, onClick }: { active: boolean; icon: Re
       </div>
       <span className={`text-[10px] font-black uppercase tracking-tighter italic ${active ? 'text-lime' : ''}`}>{label}</span>
     </button>
+  );
+}
+
+function UserMenuDropdown({
+  currentUser,
+  onClose,
+  onShowAuth,
+}: {
+  currentUser: any;
+  onClose: () => void;
+  onShowAuth: () => void;
+}) {
+  const { logout } = useAuth();
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 8 }}
+      className="absolute bottom-full right-0 mb-2 bg-navy/95 border border-white/10 rounded-lg overflow-hidden w-40 shadow-lg"
+    >
+      {currentUser ? (
+        <>
+          <div className="px-4 py-3 border-b border-white/5">
+            <p className="text-xs text-slate-400 uppercase tracking-wider">Signed in as</p>
+            <p className="text-sm font-bold text-white truncate">
+              {currentUser.email}
+            </p>
+          </div>
+          <button
+            onClick={async () => {
+              await logout();
+              onClose();
+            }}
+            className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2 transition-colors"
+          >
+            <LogOut size={16} />
+            Sign Out
+          </button>
+        </>
+      ) : (
+        <button
+          onClick={() => {
+            onShowAuth();
+            onClose();
+          }}
+          className="w-full px-4 py-3 text-left text-sm font-bold text-lime hover:bg-lime/10 transition-colors"
+        >
+          Sign In
+        </button>
+      )}
+    </motion.div>
   );
 }
