@@ -4,9 +4,10 @@ import { Trophy, Clock } from 'lucide-react';
 interface ScorecardProps {
   round: Round;
   holes: Hole[];
+  onFinishRound?: () => void;
 }
 
-export default function Scorecard({ round, holes }: ScorecardProps) {
+export default function Scorecard({ round, holes, onFinishRound }: ScorecardProps) {
   const totalPar = holes.reduce((acc, h) => acc + h.par, 0);
   const totalStrokes = Object.values(round.scores).reduce((acc, s) => acc + s.strokes, 0);
   const diff = totalStrokes - holes.filter(h => round.scores[h.number]).reduce((acc, h) => acc + h.par, 0);
@@ -73,6 +74,18 @@ export default function Scorecard({ round, holes }: ScorecardProps) {
           );
         })}
       </div>
+
+      {onFinishRound && (
+        <div className="mt-10 border-t border-white/10">
+          <button 
+            onClick={onFinishRound}
+            className="w-full bg-lime text-dark py-4 rounded-xl font-black flex items-center justify-center gap-2 shadow-xl shadow-lime/10 italic"
+          >
+            <Trophy size={20} />
+            FINISH ROUND
+          </button>
+        </div>
+      )}
     </div>
   );
 }

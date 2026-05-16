@@ -329,16 +329,7 @@ export default function App() {
                 exit={{ x: -100, opacity: 0 }}
                 className="h-full overflow-y-auto bg-dark"
               >
-                <Scorecard round={currentRound} holes={currentCourseHoles} />
-                <div className="p-4 bg-dark border-t border-white/5">
-                  <button 
-                    onClick={finishRound}
-                    className="w-full bg-lime text-dark py-4 rounded-xl font-black flex items-center justify-center gap-2 shadow-xl shadow-lime/10 italic"
-                  >
-                    <Trophy size={20} />
-                    FINISH ROUND
-                  </button>
-                </div>
+                <Scorecard round={currentRound} holes={currentCourseHoles} onFinishRound={finishRound} />
               </motion.div>
             )}
 
