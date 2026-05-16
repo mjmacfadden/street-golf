@@ -1,9 +1,10 @@
 import { useState, useEffect, ReactNode } from 'react';
 import { APIProvider } from '@vis.gl/react-google-maps';
-import { Map as MapIcon, List as ListIcon, History as HistoryIcon, Play, ChevronLeft, ChevronRight, Pencil, Flag, Trophy, Image as ImageIcon, X, Home, Info, AlertTriangle } from 'lucide-react';
+import { Map as MapIcon, List as ListIcon, History as HistoryIcon, Play, ChevronLeft, ChevronRight, Pencil, Flag, Trophy, Image as ImageIcon, X, Home, Info, AlertTriangle, Hammer } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import MapView from './components/MapView';
 import Scorecard from './components/Scorecard';
+import CourseBuilder from './components/CourseBuilder';
 import { STREET_GOLF_COURSE, COURSES, type Course } from './constants/course';
 import { Round, Score } from './types';
 import { getImagePath } from './utils/paths';
@@ -12,7 +13,7 @@ const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_M
 const hasValidKey = Boolean(API_KEY) && API_KEY !== 'YOUR_API_KEY' && API_KEY !== 'MY_MAPS_KEY';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'home' | 'map' | 'scorecard' | 'history'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'map' | 'scorecard' | 'history' | 'builder'>('home');
   const [selectedCourse, setSelectedCourse] = useState<Course>(COURSES[0]);
   const currentCourseHoles = selectedCourse.holes;
   const [currentHoleIdx, setCurrentHoleIdx] = useState<number | null>(null);
@@ -388,6 +389,15 @@ export default function App() {
                 )}
               </motion.div>
             )}
+
+            {activeTab === 'builder' && (
+              <div 
+                className="h-full overflow-y-auto scroll-smooth"
+                style={{ WebkitOverflowScrolling: 'touch' }}
+              >
+                <CourseBuilder />
+              </div>
+            )}
           </AnimatePresence>
 
           {/* Lightbox */}
@@ -507,6 +517,12 @@ export default function App() {
             icon={<ListIcon strokeWidth={3} />} 
             label="Score" 
             onClick={() => setActiveTab('scorecard')} 
+          />
+          <NavButton 
+            active={activeTab === 'builder'} 
+            icon={<Hammer strokeWidth={3} />} 
+            label="Build" 
+            onClick={() => setActiveTab('builder')} 
           />
           <NavButton 
             active={activeTab === 'history'} 
