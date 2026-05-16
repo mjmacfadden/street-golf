@@ -111,7 +111,7 @@ export default function App() {
   return (
     <APIProvider apiKey={API_KEY} version="weekly">
       <div className="h-screen flex flex-col bg-dark text-slate-100 overflow-hidden font-sans italic-font-fix">
-        <main className="flex-1 relative overflow-hidden">
+        <main className="flex-1 relative overflow-hidden pb-24 sm:pb-20">
           <AnimatePresence mode="wait">
             {activeTab === 'home' && (
               <motion.div 
@@ -499,7 +499,7 @@ export default function App() {
           )}
         </main>
 
-        <nav className="h-24 sm:h-20 bg-dark/90 backdrop-blur-xl border-t border-white/5 flex items-center justify-around px-6 safe-area-bottom">
+        <nav className="fixed bottom-0 left-0 right-0 h-24 sm:h-20 bg-dark/90 backdrop-blur-xl border-t border-white/5 flex items-center justify-around px-6 z-40" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
           <NavButton 
             active={activeTab === 'home'} 
             icon={<Home strokeWidth={3} />} 
