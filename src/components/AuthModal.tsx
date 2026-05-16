@@ -15,10 +15,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
     if (onClose) onClose();
   };
 
+  const handleBackdropClick = (e: React.MouseEvent) => {
+    // Only close if clicking the backdrop itself, not the modal
+    if (e.target === e.currentTarget && !loading && onClose) {
+      onClose();
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
+      onClick={handleBackdropClick}
       className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
     >
       <motion.div
