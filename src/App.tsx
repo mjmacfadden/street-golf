@@ -6,6 +6,7 @@ import MapView from './components/MapView';
 import Scorecard from './components/Scorecard';
 import CourseBuilder from './components/CourseBuilder';
 import { Profile } from './components/Profile';
+import HomeComponent from './components/Home';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AuthModal } from './components/AuthModal';
 import { getPublishedCourses, getUserCourses, saveRound, getUserRounds, deleteRound as deleteRoundFromFirestore } from './utils/courseService';
@@ -296,52 +297,19 @@ function AppContent() {
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 1.05 }}
-                className="h-full flex flex-col items-center justify-center p-8 text-center bg-[radial-gradient(circle_at_center,_var(--color-navy)_0%,_var(--color-dark)_70%)]"
+                className="h-full w-full"
               >
-                
-                <div className="space-y-0 mb-8">
-                  <h1 className="text-8xl font-[1000] tracking-tighter italic leading-[0.75] text-white mix-blend-difference">
-                    STREET
-                  </h1>
-                  <h1 className="text-8xl font-[1000] tracking-tighter italic leading-[0.75] text-lime">
-                    GOLF
-                  </h1>
-                </div>
-                
-                <div className="w-full max-w-xs space-y-4">
-                  <div>
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 block">Select Course</label>
-                    {coursesLoading ? (
-                      <div className="w-full px-4 py-3 bg-navy/50 border border-lime/30 rounded-lg text-lime/60 font-bold text-center">
-                        Loading courses...
-                      </div>
-                    ) : (
-                      <select 
-                        value={selectedCourse.id}
-                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedCourse(availableCourses.find(c => c.id === e.target.value) || availableCourses[0])}
-                        className="w-full px-4 py-3 bg-navy/50 border border-lime/30 rounded-lg text-lime font-bold text-center cursor-pointer hover:bg-navy/70 transition-colors"
-                      >
-                        {availableCourses.map(course => (
-                          <option key={course.id} value={course.id} className="bg-dark text-lime">
-                            {course.name}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                    <p className="text-xs text-slate-500 mt-2">{selectedCourse.location}</p>
-                    {coursesError && (
-                      <p className="text-xs text-red-400 mt-1">{coursesError}</p>
-                    )}
-                  </div>
-                  
-                  <button 
-                    onClick={startNewRound}
-                    className="w-full group relative flex items-center justify-center gap-3 bg-lime text-dark px-8 py-4 rounded-2xl font-[1000] text-xl transition-all hover:scale-105 active:scale-95 shadow-[0_15px_35px_rgba(191,255,0,0.25)] italic border-b-4 border-lime-700"
-                  >
-                    <Play fill="currentColor" size={20} />
-                    START ROUND
-                  </button>
-                </div>
+                <HomeComponent
+                  courses={availableCourses}
+                  onSelectCourse={(course) => {
+                    setSelectedCourse(course);
+                    setCurrentHoleIdx(null);
+                  }}
+                  onPlayNow={() => {
+                    startNewRound();
+                  }}
+                  loading={coursesLoading}
+                />
               </motion.div>
             )}
 
@@ -507,7 +475,7 @@ function AppContent() {
               </motion.div>
             )}
 
-            {activeTab === 'scorecard' && currentRound && (
+            {activeTab === 'scorecard' && (
               <motion.div 
                 key="scorecard"
                 initial={{ x: 100, opacity: 0 }}
@@ -515,7 +483,17 @@ function AppContent() {
                 exit={{ x: -100, opacity: 0 }}
                 className="h-full overflow-y-auto bg-dark"
               >
-                <Scorecard round={currentRound} holes={currentCourseHoles} onFinishRound={finishRound} />
+                {currentRound ? (
+                  <Scorecard round={currentRound} holes={currentCourseHoles} onFinishRound={finishRound} />
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center p-6">
+                    <div className="text-center">
+                      <Trophy size={48} className="text-lime/40 mx-auto mb-4" />
+                      <p className="text-slate-400 font-medium text-lg mb-2">No Active Round</p>
+                      <p className="text-slate-500 text-sm">Start a round on the Home tab to view your scores here</p>
+                    </div>
+                  </div>
+                )}
               </motion.div>
             )}
 
@@ -606,6 +584,7 @@ function AppContent() {
               >
                 <Profile 
                   onLogout={() => setActiveTab('home')}
+                  onCloseAuthModal={() => setActiveTab('home')}
                   onEditCourse={(course) => {
                     setEditingCourse(course);
                     setActiveTab('builder');
@@ -792,14 +771,14 @@ function AppContent() {
               label="History" 
               onClick={() => setActiveTab('history')} 
             />
-            {currentUser && (
-              <NavButton 
-                active={activeTab === 'profile'} 
-                icon={<User strokeWidth={3} />} 
-                label="Profile" 
-                onClick={() => setActiveTab('profile')} 
-              />
-            )}
+            <NavButton 
+              active={activeTab === 'profile'} 
+              icon={<User strokeWidth={3} />} 
+              label="Profile" 
+              onClick={() => {
+                setActiveTab('profile');
+              }} 
+            />
           </div>
         </nav>
 

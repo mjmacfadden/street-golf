@@ -32,6 +32,8 @@ export interface Course {
   id: string;
   userId: string;
   courseName: string;
+  creatorName?: string;
+  headerImage?: string | null;
   holes: CourseHole[];
   status: 'draft' | 'published';
   createdAt: Date;
@@ -98,9 +100,14 @@ export const saveCourse = async (
           id: courseId,
           userId,
           courseName: course.courseName,
+          creatorName: course.creatorName || 'Anonymous',
+          holes: course.holes,
           holesCount: course.holes.length,
+          headerImage: course.headerImage || null,
           createdAt: Timestamp.fromDate(now),
+          updatedAt: Timestamp.fromDate(now),
           publishedAt: Timestamp.fromDate(now),
+          status: 'published',
           // Store first tee and pin images for preview
           previewTeeImage: course.holes[0]?.teeImage || null,
           previewPinImage: course.holes[0]?.pinImage || null,
@@ -396,5 +403,52 @@ export const deleteRound = async (userId: string, roundId: string): Promise<void
       throw new Error(`Failed to delete round: ${error.message}`);
     }
     throw new Error('Failed to delete round: Unknown error');
+  }
+};
+
+/**
+ * Add a course to user's favorites
+ */
+export const addFavorite = async (userId: string, courseId: string): Promise<void> => {
+  try {
+    const favoriteRef = doc(db, 'users', userId, 'favorites', courseId);
+    await setDoc(favoriteRef, {
+      courseId,
+      addedAt: Timestamp.now(),
+    });
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(`Failed to add favorite: ${error.message}`);
+    }
+    throw new Error('Failed to add favorite: Unknown error');
+  }
+};
+
+/**
+ * Remove a course from user's favorites
+ */
+export const removeFavorite = async (userId: string, courseId: string): Promise<void> => {
+  try {
+    const favoriteRef = doc(db, 'users', userId, 'favorites', courseId);
+    await deleteDoc(favoriteRef);
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(`Failed to remove favorite: ${error.message}`);
+    }
+    throw new Error('Failed to remove favorite: Unknown error');
+  }
+};
+
+/**
+ * Get user's favorite courses
+ */
+export const getUserFavorites = async (userId: string): Promise<string[]> => {
+  try {
+    const favoritesQuery = collection(db, 'users', userId, 'favorites');
+    const snapshot = await getDocs(favoritesQuery);
+    return snapshot.docs.map(doc => doc.id);
+  } catch (error) {
+    console.warn('Failed to fetch favorites:', error);
+    return [];
   }
 };

@@ -39,29 +39,53 @@ export default function CourseBuilder({
   const pinCameraInputRef = useRef<HTMLInputElement>(null);
   const pinFileInputRef = useRef<HTMLInputElement>(null);
 
+  const courseHeaderImageCameraInputRef = useRef<HTMLInputElement>(null);
+  const courseHeaderImageFileInputRef = useRef<HTMLInputElement>(null);
+
   const [courseName, setCourseName] = useState('');
+  const [courseHeaderImage, setCourseHeaderImage] = useState<string | null>(null);
+  const [courseHeaderImageLoading, setCourseHeaderImageLoading] = useState(false);
+  const [courseHeaderImageError, setCourseHeaderImageError] = useState<string | null>(null);
+  const [courseHeaderImageMenuOpen, setCourseHeaderImageMenuOpen] = useState(false);
+  const [courseHeaderImageCameraOpen, setCourseHeaderImageCameraOpen] = useState(false);
+
   const [holes, setHoles] = useState<HoleInProgress[]>([]);
   const [expandedHole, setExpandedHole] = useState<string | null>(null);
+  const [editingHoleId, setEditingHoleId] = useState<string | null>(null);
   
-  // GPS states
+  // GPS states - separate for form and edit
   const [teeGpsLoading, setTeeGpsLoading] = useState(false);
   const [teeGpsError, setTeeGpsError] = useState<string | null>(null);
   const [pinGpsLoading, setPinGpsLoading] = useState(false);
   const [pinGpsError, setPinGpsError] = useState<string | null>(null);
+  
+  const [editTeeCpsLoading, setEditTeeGpsLoading] = useState(false);
+  const [editTeeGpsError, setEditTeeGpsError] = useState<string | null>(null);
+  const [editPinGpsLoading, setEditPinGpsLoading] = useState(false);
+  const [editPinGpsError, setEditPinGpsError] = useState<string | null>(null);
 
-  // Photo upload states
+  // Photo upload states - separate for form and edit
   const [teePhotoLoading, setTeePhotoLoading] = useState(false);
   const [teePhotoError, setTeePhotoError] = useState<string | null>(null);
   const [pinPhotoLoading, setPinPhotoLoading] = useState(false);
   const [pinPhotoError, setPinPhotoError] = useState<string | null>(null);
+  
+  const [editTeePhotoLoading, setEditTeePhotoLoading] = useState(false);
+  const [editTeePhotoError, setEditTeePhotoError] = useState<string | null>(null);
+  const [editPinPhotoLoading, setEditPinPhotoLoading] = useState(false);
+  const [editPinPhotoError, setEditPinPhotoError] = useState<string | null>(null);
 
   // Photo menu states
   const [teePhotoMenuOpen, setTeePhotoMenuOpen] = useState(false);
   const [pinPhotoMenuOpen, setPinPhotoMenuOpen] = useState(false);
+  const [editTeePhotoMenuOpen, setEditTeePhotoMenuOpen] = useState(false);
+  const [editPinPhotoMenuOpen, setEditPinPhotoMenuOpen] = useState(false);
 
   // Camera modal states
   const [teeCameraOpen, setTeeCameraOpen] = useState(false);
   const [pinCameraOpen, setPinCameraOpen] = useState(false);
+  const [editTeeCameraOpen, setEditTeeCameraOpen] = useState(false);
+  const [editPinCameraOpen, setEditPinCameraOpen] = useState(false);
 
   // Publishing states
   const [isPublishing, setIsPublishing] = useState(false);
@@ -81,10 +105,22 @@ export default function CourseBuilder({
     hazard: false,
   });
 
+  const [editingHoleData, setEditingHoleData] = useState<Partial<HoleInProgress> | null>(null);
+
+  // Get refs for edit camera/file inputs
+  const editTeeCameraInputRef = useRef<HTMLInputElement>(null);
+  const editTeeFileInputRef = useRef<HTMLInputElement>(null);
+  const editPinCameraInputRef = useRef<HTMLInputElement>(null);
+  const editPinFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Ref for scrolling to newly added hole
+  const holesListRef = useRef<HTMLDivElement>(null);
+
   // Load course data when editing
   useEffect(() => {
     if (editingCourse) {
       setCourseName(editingCourse.courseName);
+      // TODO: Load courseHeaderImage from editingCourse when added to data model
       const convertedHoles: HoleInProgress[] = editingCourse.holes.map(hole => ({
         id: hole.id,
         name: hole.name,
@@ -111,6 +147,7 @@ export default function CourseBuilder({
         tip: '',
         hazard: false,
       });
+      setCourseHeaderImage(null);
     }
   }, [editingCourse]);
 
@@ -145,12 +182,21 @@ export default function CourseBuilder({
         tip: '',
         hazard: false,
       });
+
+      // Scroll to the newly added hole
+      setTimeout(() => {
+        const holesContainer = holesListRef.current;
+        if (holesContainer) {
+          holesContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 100);
     }
   };
 
   const editHole = (hole: HoleInProgress) => {
-    // Load hole data into the form
-    setCurrentHole({
+    setEditingHoleId(hole.id);
+    setExpandedHole(hole.id);
+    setEditingHoleData({
       name: hole.name,
       par: hole.par,
       teeLocation: hole.teeLocation,
@@ -162,12 +208,37 @@ export default function CourseBuilder({
       tip: hole.tip,
       hazard: hole.hazard,
     });
-    // Remove the hole from the list so it can be re-added with updates
-    removeHole(hole.id);
+  };
+
+  const saveHoleEdit = () => {
+    if (!editingHoleId || !editingHoleData) return;
+    
+    const updatedHoles = holes.map(hole => 
+      hole.id === editingHoleId ? { ...hole, ...editingHoleData } : hole
+    );
+    setHoles(updatedHoles);
+    cancelHoleEdit();
+  };
+
+  const cancelHoleEdit = () => {
+    setEditingHoleId(null);
+    setEditingHoleData(null);
+    setExpandedHole(null);
+    setEditTeeCpsLoading(false);
+    setEditTeeGpsError(null);
+    setEditPinGpsLoading(false);
+    setEditPinGpsError(null);
+    setEditTeePhotoLoading(false);
+    setEditTeePhotoError(null);
+    setEditPinPhotoLoading(false);
+    setEditPinPhotoError(null);
   };
 
   const removeHole = (id: string) => {
     setHoles(holes.filter(h => h.id !== id));
+    if (editingHoleId === id) {
+      cancelHoleEdit();
+    }
   };
 
   const publishCourse = async () => {
@@ -198,6 +269,8 @@ export default function CourseBuilder({
         await updateDoc(courseRef, {
           courseName,
           holes,
+          headerImage: courseHeaderImage || null,
+          creatorName: currentUser.displayName || currentUser.email || 'Anonymous',
           updatedAt: Timestamp.now(),
         });
 
@@ -218,12 +291,15 @@ export default function CourseBuilder({
             tip: '',
             hazard: false,
           });
+          setCourseHeaderImage(null);
           setPublishSuccess(false);
         }, 2000);
       } else {
         // Create new course
         await saveCourse(currentUser.uid, {
           courseName,
+          headerImage: courseHeaderImage || null,
+          creatorName: currentUser.displayName || currentUser.email || 'Anonymous',
           holes,
           status: 'published',
         });
@@ -246,6 +322,7 @@ export default function CourseBuilder({
             tip: '',
             hazard: false,
           });
+          setCourseHeaderImage(null);
           setPublishSuccess(false);
         }, 2000);
       }
@@ -289,6 +366,38 @@ export default function CourseBuilder({
       setPinGpsError(error.message || 'Failed to capture GPS');
     } finally {
       setPinGpsLoading(false);
+    }
+  };
+
+  const captureEditTeeLoc = async () => {
+    setEditTeeGpsLoading(true);
+    setEditTeeGpsError(null);
+    try {
+      const location = await captureGPSLocation();
+      setEditingHoleData({
+        ...editingHoleData,
+        teeLocation: { lat: location.lat, lng: location.lng },
+      });
+    } catch (error: any) {
+      setEditTeeGpsError(error.message || 'Failed to capture GPS');
+    } finally {
+      setEditTeeGpsLoading(false);
+    }
+  };
+
+  const captureEditPinLoc = async () => {
+    setEditPinGpsLoading(true);
+    setEditPinGpsError(null);
+    try {
+      const location = await captureGPSLocation();
+      setEditingHoleData({
+        ...editingHoleData,
+        pinLocation: { lat: location.lat, lng: location.lng },
+      });
+    } catch (error: any) {
+      setEditPinGpsError(error.message || 'Failed to capture GPS');
+    } finally {
+      setEditPinGpsLoading(false);
     }
   };
 
@@ -404,6 +513,146 @@ export default function CourseBuilder({
     }
   };
 
+  const handleEditTeePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentUser || !editingHoleData) return;
+
+    const validation = validateImageFile(file);
+    if (validation) {
+      setEditTeePhotoError(validation);
+      return;
+    }
+
+    setEditTeePhotoLoading(true);
+    setEditTeePhotoError(null);
+
+    try {
+      const url = await uploadImage(file, currentUser.uid, 'preview', 'tee');
+      setEditingHoleData({ ...editingHoleData, teeImage: url });
+    } catch (error: any) {
+      setEditTeePhotoError(error.message || 'Failed to upload photo');
+    } finally {
+      setEditTeePhotoLoading(false);
+      setEditTeePhotoMenuOpen(false);
+      if (editTeeFileInputRef.current) {
+        editTeeFileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleEditPinPhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentUser || !editingHoleData) return;
+
+    const validation = validateImageFile(file);
+    if (validation) {
+      setEditPinPhotoError(validation);
+      return;
+    }
+
+    setEditPinPhotoLoading(true);
+    setEditPinPhotoError(null);
+
+    try {
+      const url = await uploadImage(file, currentUser.uid, 'preview', 'pin');
+      setEditingHoleData({ ...editingHoleData, pinImage: url });
+    } catch (error: any) {
+      setEditPinPhotoError(error.message || 'Failed to upload photo');
+    } finally {
+      setEditPinPhotoLoading(false);
+      setEditPinPhotoMenuOpen(false);
+      if (editPinFileInputRef.current) {
+        editPinFileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleEditTeeCameraCapture = async (blob: Blob) => {
+    if (!currentUser || !editingHoleData) return;
+
+    setEditTeePhotoLoading(true);
+    setEditTeePhotoError(null);
+    setEditTeeCameraOpen(false);
+
+    try {
+      const file = new File([blob], 'tee-photo.jpg', { type: 'image/jpeg' });
+      const url = await uploadImage(file, currentUser.uid, 'preview', 'tee');
+      setEditingHoleData({ ...editingHoleData, teeImage: url });
+    } catch (error: any) {
+      setEditTeePhotoError(error.message || 'Failed to upload photo');
+    } finally {
+      setEditTeePhotoLoading(false);
+    }
+  };
+
+  const handleEditPinCameraCapture = async (blob: Blob) => {
+    if (!currentUser || !editingHoleData) return;
+
+    setEditPinPhotoLoading(true);
+    setEditPinPhotoError(null);
+    setEditPinCameraOpen(false);
+
+    try {
+      const file = new File([blob], 'pin-photo.jpg', { type: 'image/jpeg' });
+      const url = await uploadImage(file, currentUser.uid, 'preview', 'pin');
+      setEditingHoleData({ ...editingHoleData, pinImage: url });
+    } catch (error: any) {
+      setEditPinPhotoError(error.message || 'Failed to upload photo');
+    } finally {
+      setEditPinPhotoLoading(false);
+    }
+  };
+
+  const handleCourseHeaderImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validation = validateImageFile(file);
+    if (validation) {
+      setCourseHeaderImageError(validation);
+      return;
+    }
+
+    setCourseHeaderImageLoading(true);
+    setCourseHeaderImageError(null);
+
+    try {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result as string;
+        setCourseHeaderImage(result);
+      };
+      reader.readAsDataURL(file);
+    } catch (error: any) {
+      setCourseHeaderImageError(error.message || 'Failed to load image');
+    } finally {
+      setCourseHeaderImageLoading(false);
+      setCourseHeaderImageMenuOpen(false);
+      if (courseHeaderImageFileInputRef.current) {
+        courseHeaderImageFileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleCourseHeaderImageCapture = async (blob: Blob) => {
+    setCourseHeaderImageLoading(true);
+    setCourseHeaderImageError(null);
+    setCourseHeaderImageCameraOpen(false);
+
+    try {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result as string;
+        setCourseHeaderImage(result);
+      };
+      reader.readAsDataURL(blob);
+    } catch (error: any) {
+      setCourseHeaderImageError(error.message || 'Failed to capture image');
+    } finally {
+      setCourseHeaderImageLoading(false);
+    }
+  };
+
   const canAddHole = currentHole.name && currentHole.teeLocation && currentHole.pinLocation;
 
   return (
@@ -424,7 +673,6 @@ export default function CourseBuilder({
           className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm"
         >
           <h3 className="text-white font-bold mb-4 flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-lime text-dark flex items-center justify-center text-xs font-black">1</div>
             COURSE INFORMATION
           </h3>
           
@@ -439,10 +687,298 @@ export default function CourseBuilder({
                 className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white placeholder-white/40 focus:outline-none focus:border-lime/50 focus:bg-white/15 transition"
               />
             </div>
+
+            <div>
+              <label className="text-white/70 text-xs font-bold uppercase tracking-wider mb-2 block">Course Header Image</label>
+              <div className="relative">
+                <div className="w-full aspect-video bg-white/5 border border-white/20 rounded-lg overflow-hidden flex items-center justify-center">
+                  {courseHeaderImage ? (
+                    <img src={courseHeaderImage} alt="Course header" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="text-center">
+                      <ImageIcon className="w-12 h-12 text-white/30 mx-auto mb-2" />
+                      <p className="text-white/40 text-sm">No image selected</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-2 mt-3">
+                  <div className="relative flex-1">
+                    <button
+                      onClick={() => setCourseHeaderImageMenuOpen(!courseHeaderImageMenuOpen)}
+                      disabled={courseHeaderImageLoading}
+                      className="w-full px-4 py-2 bg-lime text-dark font-bold rounded-lg hover:bg-lime/90 disabled:bg-lime/50 transition flex items-center justify-center gap-2"
+                    >
+                      <ImageIcon size={18} />
+                      {courseHeaderImageLoading ? 'Uploading...' : 'Add Image'}
+                    </button>
+
+                    {courseHeaderImageMenuOpen && (
+                      <div className="absolute bottom-full left-0 right-0 mb-2 bg-white/10 border border-white/20 rounded-lg overflow-hidden z-10">
+                        <button
+                          onClick={() => {
+                            setCourseHeaderImageCameraOpen(true);
+                            setCourseHeaderImageMenuOpen(false);
+                          }}
+                          className="w-full px-4 py-2 text-white hover:bg-white/10 transition text-left text-sm"
+                        >
+                          Take Photo
+                        </button>
+                        <button
+                          onClick={() => {
+                            courseHeaderImageFileInputRef.current?.click();
+                            setCourseHeaderImageMenuOpen(false);
+                          }}
+                          className="w-full px-4 py-2 text-white hover:bg-white/10 transition text-left text-sm border-t border-white/10"
+                        >
+                          Choose from Gallery
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {courseHeaderImage && (
+                    <button
+                      onClick={() => setCourseHeaderImage(null)}
+                      className="px-4 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition"
+                    >
+                      <X size={18} />
+                    </button>
+                  )}
+                </div>
+
+                {courseHeaderImageError && (
+                  <div className="mt-2 p-2 bg-red-500/20 border border-red-500/30 rounded text-red-200 text-sm flex items-center gap-2">
+                    <AlertCircle size={16} />
+                    {courseHeaderImageError}
+                  </div>
+                )}
+              </div>
+
+              <input
+                ref={courseHeaderImageCameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleCourseHeaderImageSelect}
+              />
+              <input
+                ref={courseHeaderImageFileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleCourseHeaderImageSelect}
+              />
+            </div>
           </div>
         </motion.div>
 
-        {/* Add Hole Section */}
+        {/* Holes List - appears above Add Hole form when holes exist */}
+        <AnimatePresence>
+          {holes.length > 0 && (
+            <motion.div
+              ref={holesListRef}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="space-y-3"
+            >
+              <h3 className="text-white font-bold mb-4 flex items-center gap-2">
+                <div className="w-6 h-6 rounded-full bg-lime text-dark flex items-center justify-center text-xs font-black">1</div>
+                COURSE HOLES ({holes.length})
+              </h3>
+
+              {holes.map((hole, idx) => (
+                <motion.div
+                  key={hole.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
+                  className="bg-white/5 border border-white/10 rounded-xl p-4 backdrop-blur-sm cursor-pointer hover:border-lime/30 hover:bg-white/10 transition"
+                  onClick={() => setExpandedHole(expandedHole === hole.id ? null : hole.id)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3 flex-1">
+                      <div className="w-8 h-8 rounded-full bg-lime/20 text-lime flex items-center justify-center font-black text-sm">
+                        {idx + 1}
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="text-white font-bold">{hole.name}</h4>
+                        <p className="text-white/50 text-sm">Par {hole.par} {hole.hazard && '• Hazard'}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          editHole(hole);
+                        }}
+                        className="p-2 hover:bg-lime/20 rounded-lg text-lime hover:text-lime transition"
+                        title="Edit hole"
+                      >
+                        <Pencil size={18} />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeHole(hole.id);
+                        }}
+                        className="p-2 hover:bg-red-500/20 rounded-lg text-white/50 hover:text-red-400 transition"
+                        title="Delete hole"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Expanded Details or Edit Form */}
+                  <AnimatePresence>
+                    {expandedHole === hole.id && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="mt-4 pt-4 border-t border-white/10 space-y-4 text-sm"
+                      >
+                        {editingHoleId === hole.id && editingHoleData ? (
+                          // Edit mode form
+                          <div className="space-y-4">
+                            {/* Hole Name & Par */}
+                            <div className="grid grid-cols-3 gap-3">
+                              <div className="col-span-2">
+                                <label className="text-white/70 text-xs font-bold uppercase tracking-wider mb-2 block">Hole Name</label>
+                                <input
+                                  type="text"
+                                  value={editingHoleData.name || ''}
+                                  onChange={(e) => setEditingHoleData({ ...editingHoleData, name: e.target.value })}
+                                  className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white placeholder-white/40 focus:outline-none focus:border-lime/50 text-sm"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-white/70 text-xs font-bold uppercase tracking-wider mb-2 block">Par</label>
+                                <select
+                                  value={editingHoleData.par || 3}
+                                  onChange={(e) => setEditingHoleData({ ...editingHoleData, par: parseInt(e.target.value) })}
+                                  className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white text-sm"
+                                >
+                                  <option value={3}>Par 3</option>
+                                  <option value={4}>Par 4</option>
+                                  <option value={5}>Par 5</option>
+                                </select>
+                              </div>
+                            </div>
+
+                            {/* Tee Location Edit */}
+                            <div className="bg-white/5 border border-white/10 rounded-lg p-3 space-y-2">
+                              <div className="text-xs font-bold uppercase tracking-wider text-white">Tee Location</div>
+                              <button
+                                onClick={captureEditTeeLoc}
+                                disabled={editTeeCpsLoading}
+                                className="w-full text-left text-xs font-bold py-2 px-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-lime"
+                              >
+                                {editTeeCpsLoading ? 'Acquiring GPS...' : editingHoleData.teeLocation ? `✓ ${editingHoleData.teeLocation.lat.toFixed(4)}, ${editingHoleData.teeLocation.lng.toFixed(4)}` : 'Capture GPS'}
+                              </button>
+                              {editTeeGpsError && <p className="text-xs text-red-400">{editTeeGpsError}</p>}
+                              <textarea
+                                value={editingHoleData.teeDescription || ''}
+                                onChange={(e) => setEditingHoleData({ ...editingHoleData, teeDescription: e.target.value })}
+                                placeholder="Describe tee location..."
+                                rows={1}
+                                className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white text-xs"
+                              />
+                            </div>
+
+                            {/* Pin Location Edit */}
+                            <div className="bg-white/5 border border-white/10 rounded-lg p-3 space-y-2">
+                              <div className="text-xs font-bold uppercase tracking-wider text-white">Pin Location</div>
+                              <button
+                                onClick={captureEditPinLoc}
+                                disabled={editPinGpsLoading}
+                                className="w-full text-left text-xs font-bold py-2 px-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-lime"
+                              >
+                                {editPinGpsLoading ? 'Acquiring GPS...' : editingHoleData.pinLocation ? `✓ ${editingHoleData.pinLocation.lat.toFixed(4)}, ${editingHoleData.pinLocation.lng.toFixed(4)}` : 'Capture GPS'}
+                              </button>
+                              {editPinGpsError && <p className="text-xs text-red-400">{editPinGpsError}</p>}
+                              <textarea
+                                value={editingHoleData.pinDescription || ''}
+                                onChange={(e) => setEditingHoleData({ ...editingHoleData, pinDescription: e.target.value })}
+                                placeholder="Describe pin location..."
+                                rows={1}
+                                className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white text-xs"
+                              />
+                            </div>
+
+                            {/* Tips & Hazard */}
+                            <div className="space-y-2">
+                              <label className="text-white/70 text-xs font-bold uppercase">Tips</label>
+                              <textarea
+                                value={editingHoleData.tip || ''}
+                                onChange={(e) => setEditingHoleData({ ...editingHoleData, tip: e.target.value })}
+                                rows={1}
+                                className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-white text-xs"
+                              />
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  id={`hazard-${hole.id}`}
+                                  checked={editingHoleData.hazard || false}
+                                  onChange={(e) => setEditingHoleData({ ...editingHoleData, hazard: e.target.checked })}
+                                  className="w-4 h-4 accent-lime"
+                                />
+                                <label htmlFor={`hazard-${hole.id}`} className="text-white/80 text-xs font-bold">Mark as Hazard</label>
+                              </div>
+                            </div>
+
+                            {/* Save/Cancel Buttons */}
+                            <div className="flex gap-2">
+                              <button
+                                onClick={saveHoleEdit}
+                                className="flex-1 px-3 py-2 bg-lime text-dark font-bold text-xs rounded-lg hover:bg-lime/90"
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={cancelHoleEdit}
+                                className="flex-1 px-3 py-2 bg-white/10 text-white font-bold text-xs rounded-lg hover:bg-white/20"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          // View-only mode
+                          <>
+                            {hole.teeDescription && (
+                              <div>
+                                <p className="text-white/60 text-xs uppercase font-bold mb-1">Tee Location</p>
+                                <p className="text-white/80">{hole.teeDescription}</p>
+                              </div>
+                            )}
+                            {hole.pinDescription && (
+                              <div>
+                                <p className="text-white/60 text-xs uppercase font-bold mb-1">Pin Location</p>
+                                <p className="text-white/80">{hole.pinDescription}</p>
+                              </div>
+                            )}
+                            {hole.tip && (
+                              <div>
+                                <p className="text-white/60 text-xs uppercase font-bold mb-1">Tips</p>
+                                <p className="text-white/80">{hole.tip}</p>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -450,7 +986,7 @@ export default function CourseBuilder({
           className="bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm"
         >
           <h3 className="text-white font-bold mb-4 flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-lime text-dark flex items-center justify-center text-xs font-black">2</div>
+            <div className="w-6 h-6 rounded-full bg-lime text-dark flex items-center justify-center text-xs font-black">{holes.length + 1}</div>
             ADD HOLE {holes.length > 0 && <span className="text-lime ml-auto text-sm">({holes.length})</span>}
           </h3>
 
@@ -937,99 +1473,6 @@ export default function CourseBuilder({
           </div>
         </motion.div>
 
-        {/* Holes List */}
-        <AnimatePresence>
-          {holes.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="space-y-3"
-            >
-              <h3 className="text-white font-bold mb-4 flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full bg-lime text-dark flex items-center justify-center text-xs font-black">3</div>
-                COURSE HOLES ({holes.length})
-              </h3>
-
-              {holes.map((hole, idx) => (
-                <motion.div
-                  key={hole.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 20 }}
-                  className="bg-white/5 border border-white/10 rounded-xl p-4 backdrop-blur-sm cursor-pointer hover:border-lime/30 hover:bg-white/10 transition"
-                  onClick={() => setExpandedHole(expandedHole === hole.id ? null : hole.id)}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3 flex-1">
-                      <div className="w-8 h-8 rounded-full bg-lime/20 text-lime flex items-center justify-center font-black text-sm">
-                        {idx + 1}
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="text-white font-bold">{hole.name}</h4>
-                        <p className="text-white/50 text-sm">Par {hole.par} {hole.hazard && '• Hazard'}</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          editHole(hole);
-                        }}
-                        className="p-2 hover:bg-lime/20 rounded-lg text-lime hover:text-lime transition"
-                        title="Edit hole"
-                      >
-                        <Pencil size={18} />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeHole(hole.id);
-                        }}
-                        className="p-2 hover:bg-red-500/20 rounded-lg text-white/50 hover:text-red-400 transition"
-                        title="Delete hole"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Expanded Details */}
-                  <AnimatePresence>
-                    {expandedHole === hole.id && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="mt-4 pt-4 border-t border-white/10 space-y-3 text-sm"
-                      >
-                        {hole.teeDescription && (
-                          <div>
-                            <p className="text-white/60 text-xs uppercase font-bold mb-1">Tee Location</p>
-                            <p className="text-white/80">{hole.teeDescription}</p>
-                          </div>
-                        )}
-                        {hole.pinDescription && (
-                          <div>
-                            <p className="text-white/60 text-xs uppercase font-bold mb-1">Pin Location</p>
-                            <p className="text-white/80">{hole.pinDescription}</p>
-                          </div>
-                        )}
-                        {hole.tip && (
-                          <div>
-                            <p className="text-white/60 text-xs uppercase font-bold mb-1">Tips</p>
-                            <p className="text-white/80">{hole.tip}</p>
-                          </div>
-                        )}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </motion.div>
-              ))}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
         {/* Publish Error */}
         {publishError && (
           <motion.div
@@ -1122,6 +1565,13 @@ export default function CourseBuilder({
             location="pin"
             onCapture={handlePinCameraCapture}
             onCancel={() => setPinCameraOpen(false)}
+          />
+        )}
+        {courseHeaderImageCameraOpen && (
+          <CameraCapture
+            location="course"
+            onCapture={handleCourseHeaderImageCapture}
+            onCancel={() => setCourseHeaderImageCameraOpen(false)}
           />
         )}
       </AnimatePresence>

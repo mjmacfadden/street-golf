@@ -1,42 +1,56 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Edit, Trash2, LogOut, AlertTriangle, Loader } from 'lucide-react';
+import { Edit, Trash2, LogOut, AlertTriangle, Loader, Heart } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { getUserCourses, deleteCourse, type Course as FirestoreCourse } from '../utils/courseService';
+import { AuthModal } from './AuthModal';
+import { getUserCourses, deleteCourse, getUserFavorites, removeFavorite, getPublishedCourses, type Course as FirestoreCourse } from '../utils/courseService';
 
 interface ProfileProps {
   onEditCourse?: (course: FirestoreCourse) => void;
   onLogout?: () => void;
   onDeleteCourse?: (courseId: string) => void;
+  onCloseAuthModal?: () => void;
 }
 
-export const Profile: React.FC<ProfileProps> = ({ onEditCourse, onLogout, onDeleteCourse }) => {
+export const Profile: React.FC<ProfileProps> = ({ onEditCourse, onLogout, onDeleteCourse, onCloseAuthModal }) => {
   const { currentUser, logout } = useAuth();
   const [courses, setCourses] = useState<FirestoreCourse[]>([]);
+  const [favoriteCourses, setFavoriteCourses] = useState<FirestoreCourse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
 
-  // Fetch user's courses
+  // Fetch user's courses and favorites
   useEffect(() => {
-    const fetchCourses = async () => {
+    const fetchData = async () => {
       if (!currentUser?.uid) return;
 
       try {
         setLoading(true);
         setError(null);
+        
         const userCourses = await getUserCourses(currentUser.uid);
         setCourses(userCourses);
+
+        // Fetch favorites
+        const favoriteIds = await getUserFavorites(currentUser.uid);
+        if (favoriteIds.length > 0) {
+          const publishedCourses = await getPublishedCourses();
+          const favorites = publishedCourses.filter(course => favoriteIds.includes(course.id));
+          setFavoriteCourses(favorites);
+        } else {
+          setFavoriteCourses([]);
+        }
       } catch (err) {
-        console.error('Failed to fetch courses:', err);
-        setError('Failed to load your courses');
+        console.error('Failed to fetch data:', err);
+        setError('Failed to load your data');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchCourses();
+    fetchData();
   }, [currentUser]);
 
   const handleDelete = async (courseId: string) => {
@@ -61,11 +75,21 @@ export const Profile: React.FC<ProfileProps> = ({ onEditCourse, onLogout, onDele
     if (onLogout) onLogout();
   };
 
+  const handleRemoveFavorite = async (courseId: string) => {
+    if (!currentUser?.uid) return;
+
+    try {
+      await removeFavorite(currentUser.uid, courseId);
+      setFavoriteCourses(favoriteCourses.filter(c => c.id !== courseId));
+    } catch (err) {
+      console.error('Failed to remove favorite:', err);
+      setError('Failed to remove favorite');
+    }
+  };
+
   if (!currentUser) {
     return (
-      <div className="h-full flex items-center justify-center">
-        <p className="text-slate-400">Not logged in</p>
-      </div>
+      <AuthModal onClose={onCloseAuthModal} />
     );
   }
 
@@ -175,6 +199,55 @@ export const Profile: React.FC<ProfileProps> = ({ onEditCourse, onLogout, onDele
                         <Trash2 size={16} />
                       </button>
                     </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Favorites Section */}
+        <div className="mt-8">
+          <h3 className="text-xl font-black text-white mb-4 uppercase italic tracking-tight">
+            My Favorites ({favoriteCourses.length})
+          </h3>
+
+          {!loading && favoriteCourses.length === 0 && (
+            <div className="bg-navy/30 border border-slate-700 rounded-3xl p-12 text-center">
+              <p className="text-slate-400 mb-2">No favorites yet</p>
+              <p className="text-slate-500 text-sm">Heart courses on the home tab to add them here</p>
+            </div>
+          )}
+
+          {favoriteCourses.length > 0 && (
+            <div className="space-y-3">
+              {favoriteCourses.map((course, idx) => (
+                <motion.div
+                  key={course.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: idx * 0.05 }}
+                  className="bg-slate-900/50 border border-slate-700 rounded-2xl p-4 hover:bg-slate-900/70 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-black text-white mb-1 truncate uppercase italic">
+                        {course.courseName}
+                      </h4>
+                      <div className="flex gap-4 text-xs text-slate-400">
+                        <span>{course.holes.length} holes</span>
+                        {course.creatorName && <span>By: {course.creatorName}</span>}
+                      </div>
+                    </div>
+
+                    {/* Remove Favorite Button */}
+                    <button
+                      onClick={() => handleRemoveFavorite(course.id)}
+                      className="p-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-colors shrink-0"
+                      title="Remove from favorites"
+                    >
+                      <Heart size={16} fill="currentColor" />
+                    </button>
                   </div>
                 </motion.div>
               ))}
