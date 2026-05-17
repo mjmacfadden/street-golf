@@ -55,6 +55,7 @@ function AppContent() {
       id: fsCourse.id,
       name: fsCourse.courseName,
       location: 'User Created Course',
+      headerImage: fsCourse.headerImage || null,
       holes: fsCourse.holes.map((hole, idx) => ({
         number: idx + 1,
         name: hole.name,

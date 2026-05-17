@@ -5,6 +5,7 @@ export interface Course {
   name: string;
   location: string;
   holes: Hole[];
+  headerImage?: string | null;
 }
 
 export const STREET_GOLF_COURSE: Hole[] = [

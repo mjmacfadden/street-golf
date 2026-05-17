@@ -22,7 +22,7 @@ export const captureGPSLocation = (
 ): Promise<GPSLocation> => {
   // Detect if likely mobile or desktop - mobile user agents typically have "Mobile" in them
   const isMobile = /Mobile|Android|iPhone|iPad|iPod/.test(navigator.userAgent);
-  const defaultTimeout = isMobile ? 60000 : 30000; // 30s on desktop, 60s on mobile
+  const defaultTimeout = isMobile ? 60000 : 5000; // 5s on desktop (WiFi-based), 60s on mobile (GPS)
   const finalTimeout = timeout ?? defaultTimeout;
 
   return new Promise((resolve, reject) => {
@@ -243,4 +243,59 @@ export const captureGPSLocationWithFeedback = (options: {
       }
     );
   });
+};
+
+/**
+ * Get approximate location using IP address (very fast, ~100ms, but less accurate)
+ * Useful as fallback on desktop when GPS/WiFi not available
+ * @returns Promise with approximate coordinates or error
+ */
+export const captureLocationByIP = (): Promise<GPSLocation> => {
+  return fetch('https://ipapi.co/json/')
+    .then((response) => response.json())
+    .then((data) => {
+      if (data.latitude && data.longitude) {
+        return {
+          lat: data.latitude,
+          lng: data.longitude,
+          accuracy: 5000, // IP-based accuracy is typically 1-5km, use 5km as estimate
+          timestamp: Date.now(),
+        } as GPSLocation;
+      }
+      throw new Error('Invalid IP geolocation response');
+    })
+    .catch((error) => {
+      throw {
+        code: 'POSITION_UNAVAILABLE',
+        message: 'Unable to determine location from IP address',
+      } as GeolocationError;
+    });
+};
+
+/**
+ * Capture location with intelligent fallbacks for desktop
+ * On desktop: Tries WiFi-based geolocation (5s), then IP-based geolocation
+ * On mobile: Uses GPS with continuous monitoring
+ * @returns Promise with coordinates or error
+ */
+export const captureLocationWithFallback = async (): Promise<GPSLocation> => {
+  const isMobile = /Mobile|Android|iPhone|iPad|iPod/.test(navigator.userAgent);
+
+  // On mobile, use standard GPS capture
+  if (isMobile) {
+    return captureGPSLocation();
+  }
+
+  // On desktop, try WiFi-based geolocation first (5s timeout), then fallback to IP
+  try {
+    return await captureGPSLocation(5000, 10);
+  } catch (gpsError) {
+    // GPS/WiFi failed, try IP-based geolocation as quick fallback
+    try {
+      return await captureLocationByIP();
+    } catch (ipError) {
+      // Both failed, return the original GPS error
+      throw gpsError;
+    }
+  }
 };

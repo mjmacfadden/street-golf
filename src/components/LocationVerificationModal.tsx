@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { X, MapPin, Copy, Check } from 'lucide-react';
+import { X, MapPin, Copy, Check, AlertCircle } from 'lucide-react';
 import { Map, AdvancedMarker, Pin } from '@vis.gl/react-google-maps';
 import { motion } from 'framer-motion';
 
 interface LocationVerificationModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onClear?: () => void;
   location: { lat: number; lng: number };
   locationName: string;
   accuracy?: number;
@@ -14,11 +15,13 @@ interface LocationVerificationModalProps {
 export const LocationVerificationModal: React.FC<LocationVerificationModalProps> = ({
   isOpen,
   onClose,
+  onClear,
   location,
   locationName,
   accuracy,
 }) => {
   const [copied, setCopied] = useState(false);
+  const isMobile = /Mobile|Android|iPhone|iPad|iPod/.test(navigator.userAgent);
 
   const handleCopyLocation = () => {
     const text = `${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}`;
@@ -28,8 +31,6 @@ export const LocationVerificationModal: React.FC<LocationVerificationModalProps>
   };
 
   if (!isOpen) return null;
-
-  const googleMapsUrl = `https://www.google.com/maps/@${location.lat},${location.lng},18z`;
 
   return (
     <motion.div
@@ -59,6 +60,20 @@ export const LocationVerificationModal: React.FC<LocationVerificationModalProps>
             <X size={20} className="text-white/60 hover:text-white" />
           </button>
         </div>
+
+        {/* Desktop Accuracy Warning */}
+        {!isMobile && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-orange-500/20 border-b border-orange-500/30 px-6 py-3 flex items-start gap-3"
+          >
+            <AlertCircle size={18} className="text-orange-400 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-orange-200">
+              Desktop location accuracy is limited. Mobile GPS provides better precision for testing purposes.
+            </p>
+          </motion.div>
+        )}
 
         {/* Map */}
         <div className="h-64 bg-slate-900 relative overflow-hidden">
@@ -110,18 +125,18 @@ export const LocationVerificationModal: React.FC<LocationVerificationModalProps>
             </div>
           )}
 
-          {/* Google Maps Link */}
-          <div className="pt-2">
-            <a
-              href={googleMapsUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full bg-lime/20 hover:bg-lime/30 text-lime rounded-lg py-2 text-sm font-bold uppercase transition flex items-center justify-center gap-2"
+          {/* Clear & Retry Button */}
+          {onClear && (
+            <button
+              onClick={() => {
+                onClear();
+                onClose();
+              }}
+              className="w-full bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg py-2 text-sm font-bold uppercase transition"
             >
-              <MapPin size={16} />
-              Open in Google Maps
-            </a>
-          </div>
+              Clear & Retry
+            </button>
+          )}
         </div>
 
         {/* Footer Info */}
