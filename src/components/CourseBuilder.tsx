@@ -6,6 +6,8 @@ import { uploadImage, validateImageFile } from '../utils/imageUpload';
 import { saveCourse } from '../utils/courseService';
 import { useAuth } from '../context/AuthContext';
 import CameraCapture from './CameraCapture';
+import { LocationVerificationModal } from './LocationVerificationModal';
+import { ManualLocationInput } from './ManualLocationInput';
 import type { Course as FirestoreCourse } from '../utils/courseService';
 import { db } from '../config/firebase';
 import { updateDoc, doc, Timestamp } from 'firebase/firestore';
@@ -56,13 +58,23 @@ export default function CourseBuilder({
   // GPS states - separate for form and edit
   const [teeGpsLoading, setTeeGpsLoading] = useState(false);
   const [teeGpsError, setTeeGpsError] = useState<string | null>(null);
+  const [teeAccuracy, setTeeAccuracy] = useState<number | undefined>();
   const [pinGpsLoading, setPinGpsLoading] = useState(false);
   const [pinGpsError, setPinGpsError] = useState<string | null>(null);
+  const [pinAccuracy, setPinAccuracy] = useState<number | undefined>();
   
   const [editTeeCpsLoading, setEditTeeGpsLoading] = useState(false);
   const [editTeeGpsError, setEditTeeGpsError] = useState<string | null>(null);
+  const [editTeeAccuracy, setEditTeeAccuracy] = useState<number | undefined>();
   const [editPinGpsLoading, setEditPinGpsLoading] = useState(false);
   const [editPinGpsError, setEditPinGpsError] = useState<string | null>(null);
+  const [editPinAccuracy, setEditPinAccuracy] = useState<number | undefined>();
+
+  // Location verification modal
+  const [locationModalOpen, setLocationModalOpen] = useState<null | 'tee' | 'pin' | 'editTee' | 'editPin'>(null);
+  
+  // Manual location input (for testing on desktop)
+  const [manualLocationOpen, setManualLocationOpen] = useState<null | 'tee' | 'pin' | 'editTee' | 'editPin'>(null);
 
   // Photo upload states - separate for form and edit
   const [teePhotoLoading, setTeePhotoLoading] = useState(false);
@@ -342,6 +354,7 @@ export default function CourseBuilder({
     setTeeGpsError(null);
     try {
       const location = await captureGPSLocation();
+      setTeeAccuracy(location.accuracy);
       setCurrentHole({
         ...currentHole,
         teeLocation: { lat: location.lat, lng: location.lng },
@@ -358,6 +371,7 @@ export default function CourseBuilder({
     setPinGpsError(null);
     try {
       const location = await captureGPSLocation();
+      setPinAccuracy(location.accuracy);
       setCurrentHole({
         ...currentHole,
         pinLocation: { lat: location.lat, lng: location.lng },
@@ -374,6 +388,7 @@ export default function CourseBuilder({
     setEditTeeGpsError(null);
     try {
       const location = await captureGPSLocation();
+      setEditTeeAccuracy(location.accuracy);
       setEditingHoleData({
         ...editingHoleData,
         teeLocation: { lat: location.lat, lng: location.lng },
@@ -390,6 +405,7 @@ export default function CourseBuilder({
     setEditPinGpsError(null);
     try {
       const location = await captureGPSLocation();
+      setEditPinAccuracy(location.accuracy);
       setEditingHoleData({
         ...editingHoleData,
         pinLocation: { lat: location.lat, lng: location.lng },
@@ -399,6 +415,39 @@ export default function CourseBuilder({
     } finally {
       setEditPinGpsLoading(false);
     }
+  };
+
+  // Manual location input handlers (for testing on desktop)
+  const handleManualTeeLoc = (lat: number, lng: number) => {
+    setCurrentHole({
+      ...currentHole,
+      teeLocation: { lat, lng },
+    });
+    setTeeAccuracy(undefined);
+  };
+
+  const handleManualPinLoc = (lat: number, lng: number) => {
+    setCurrentHole({
+      ...currentHole,
+      pinLocation: { lat, lng },
+    });
+    setPinAccuracy(undefined);
+  };
+
+  const handleManualEditTeeLoc = (lat: number, lng: number) => {
+    setEditingHoleData({
+      ...editingHoleData,
+      teeLocation: { lat, lng },
+    });
+    setEditTeeAccuracy(undefined);
+  };
+
+  const handleManualEditPinLoc = (lat: number, lng: number) => {
+    setEditingHoleData({
+      ...editingHoleData,
+      pinLocation: { lat, lng },
+    });
+    setEditPinAccuracy(undefined);
   };
 
   const handleTeePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -872,14 +921,40 @@ export default function CourseBuilder({
                             {/* Tee Location Edit */}
                             <div className="bg-white/5 border border-white/10 rounded-lg p-3 space-y-2">
                               <div className="text-xs font-bold uppercase tracking-wider text-white">Tee Location</div>
-                              <button
-                                onClick={captureEditTeeLoc}
-                                disabled={editTeeCpsLoading}
-                                className="w-full text-left text-xs font-bold py-2 px-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-lime"
-                              >
-                                {editTeeCpsLoading ? 'Acquiring GPS...' : editingHoleData.teeLocation ? `✓ ${editingHoleData.teeLocation.lat.toFixed(4)}, ${editingHoleData.teeLocation.lng.toFixed(4)}` : 'Capture GPS'}
-                              </button>
-                              {editTeeGpsError && <p className="text-xs text-red-400">{editTeeGpsError}</p>}
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={captureEditTeeLoc}
+                                  disabled={editTeeCpsLoading}
+                                  className="flex-1 text-left text-xs font-bold py-2 px-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-lime"
+                                >
+                                  {editTeeCpsLoading ? 'Acquiring GPS...' : editingHoleData.teeLocation ? 'Retake' : 'Capture GPS'}
+                                </button>
+                                {editingHoleData.teeLocation && (
+                                  <button
+                                    onClick={() => setLocationModalOpen('editTee')}
+                                    className="text-xs font-bold py-2 px-3 bg-lime/20 hover:bg-lime/30 border border-lime/50 rounded-lg text-lime"
+                                    title="View location on map"
+                                  >
+                                    View
+                                  </button>
+                                )}
+                              </div>
+                              {editingHoleData.teeLocation && (
+                                <div className="text-xs text-lime/80">
+                                  ✓ {editingHoleData.teeLocation.lat.toFixed(4)}, {editingHoleData.teeLocation.lng.toFixed(4)}
+                                </div>
+                              )}
+                              {editTeeGpsError && (
+                                <div className="flex gap-2">
+                                  <p className="text-xs text-red-400 flex-1">{editTeeGpsError}</p>
+                                  <button
+                                    onClick={() => setManualLocationOpen('editTee')}
+                                    className="text-xs text-lime/60 hover:text-lime/80 whitespace-nowrap"
+                                  >
+                                    Enter Manually
+                                  </button>
+                                </div>
+                              )}
                               <textarea
                                 value={editingHoleData.teeDescription || ''}
                                 onChange={(e) => setEditingHoleData({ ...editingHoleData, teeDescription: e.target.value })}
@@ -892,14 +967,40 @@ export default function CourseBuilder({
                             {/* Pin Location Edit */}
                             <div className="bg-white/5 border border-white/10 rounded-lg p-3 space-y-2">
                               <div className="text-xs font-bold uppercase tracking-wider text-white">Pin Location</div>
-                              <button
-                                onClick={captureEditPinLoc}
-                                disabled={editPinGpsLoading}
-                                className="w-full text-left text-xs font-bold py-2 px-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-lime"
-                              >
-                                {editPinGpsLoading ? 'Acquiring GPS...' : editingHoleData.pinLocation ? `✓ ${editingHoleData.pinLocation.lat.toFixed(4)}, ${editingHoleData.pinLocation.lng.toFixed(4)}` : 'Capture GPS'}
-                              </button>
-                              {editPinGpsError && <p className="text-xs text-red-400">{editPinGpsError}</p>}
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={captureEditPinLoc}
+                                  disabled={editPinGpsLoading}
+                                  className="flex-1 text-left text-xs font-bold py-2 px-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-lime"
+                                >
+                                  {editPinGpsLoading ? 'Acquiring GPS...' : editingHoleData.pinLocation ? 'Retake' : 'Capture GPS'}
+                                </button>
+                                {editingHoleData.pinLocation && (
+                                  <button
+                                    onClick={() => setLocationModalOpen('editPin')}
+                                    className="text-xs font-bold py-2 px-3 bg-lime/20 hover:bg-lime/30 border border-lime/50 rounded-lg text-lime"
+                                    title="View location on map"
+                                  >
+                                    View
+                                  </button>
+                                )}
+                              </div>
+                              {editingHoleData.pinLocation && (
+                                <div className="text-xs text-lime/80">
+                                  ✓ {editingHoleData.pinLocation.lat.toFixed(4)}, {editingHoleData.pinLocation.lng.toFixed(4)}
+                                </div>
+                              )}
+                              {editPinGpsError && (
+                                <div className="flex gap-2">
+                                  <p className="text-xs text-red-400 flex-1">{editPinGpsError}</p>
+                                  <button
+                                    onClick={() => setManualLocationOpen('editPin')}
+                                    className="text-xs text-lime/60 hover:text-lime/80 whitespace-nowrap"
+                                  >
+                                    Enter Manually
+                                  </button>
+                                </div>
+                              )}
                               <textarea
                                 value={editingHoleData.pinDescription || ''}
                                 onChange={(e) => setEditingHoleData({ ...editingHoleData, pinDescription: e.target.value })}
@@ -1042,13 +1143,20 @@ export default function CourseBuilder({
                       {currentHole.teeLocation ? (
                         <>
                           <div className="text-xs font-bold text-lime">✓ TEE LOCATION</div>
-                          <div className="text-xs text-lime/80">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setLocationModalOpen('tee');
+                            }}
+                            className="text-xs text-lime/80 hover:text-lime hover:underline mt-0.5 text-left"
+                          >
                             {currentHole.teeLocation.lat.toFixed(4)}, {currentHole.teeLocation.lng.toFixed(4)}
-                          </div>
+                          </button>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               setCurrentHole({ ...currentHole, teeLocation: null });
+                              setTeeAccuracy(undefined);
                             }}
                             className="text-xs text-lime/60 hover:text-lime/80 mt-0.5"
                           >
@@ -1064,15 +1172,26 @@ export default function CourseBuilder({
                         <>
                           <div className="text-xs font-bold uppercase tracking-wider text-red-400">Error</div>
                           <div className="text-xs text-red-400/70">{teeGpsError}</div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setTeeGpsError(null);
-                            }}
-                            className="text-xs text-red-400/60 hover:text-red-400/80 mt-0.5"
-                          >
-                            Retry
-                          </button>
+                          <div className="flex gap-2 mt-0.5">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setTeeGpsError(null);
+                              }}
+                              className="text-xs text-red-400/60 hover:text-red-400/80"
+                            >
+                              Retry
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setManualLocationOpen('tee');
+                              }}
+                              className="text-xs text-lime/60 hover:text-lime/80"
+                            >
+                              Enter Manually
+                            </button>
+                          </div>
                         </>
                       ) : (
                         <>
@@ -1247,13 +1366,20 @@ export default function CourseBuilder({
                       {currentHole.pinLocation ? (
                         <>
                           <div className="text-xs font-bold text-lime">✓ PIN LOCATION</div>
-                          <div className="text-xs text-lime/80">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setLocationModalOpen('pin');
+                            }}
+                            className="text-xs text-lime/80 hover:text-lime hover:underline mt-0.5 text-left"
+                          >
                             {currentHole.pinLocation.lat.toFixed(4)}, {currentHole.pinLocation.lng.toFixed(4)}
-                          </div>
+                          </button>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               setCurrentHole({ ...currentHole, pinLocation: null });
+                              setPinAccuracy(undefined);
                             }}
                             className="text-xs text-lime/60 hover:text-lime/80 mt-0.5"
                           >
@@ -1269,15 +1395,26 @@ export default function CourseBuilder({
                         <>
                           <div className="text-xs font-bold uppercase tracking-wider text-red-400">Error</div>
                           <div className="text-xs text-red-400/70">{pinGpsError}</div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setPinGpsError(null);
-                            }}
-                            className="text-xs text-red-400/60 hover:text-red-400/80 mt-0.5"
-                          >
-                            Retry
-                          </button>
+                          <div className="flex gap-2 mt-0.5">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPinGpsError(null);
+                              }}
+                              className="text-xs text-red-400/60 hover:text-red-400/80"
+                            >
+                              Retry
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setManualLocationOpen('pin');
+                              }}
+                              className="text-xs text-lime/60 hover:text-lime/80"
+                            >
+                              Enter Manually
+                            </button>
+                          </div>
                         </>
                       ) : (
                         <>
@@ -1572,6 +1709,82 @@ export default function CourseBuilder({
             location="course"
             onCapture={handleCourseHeaderImageCapture}
             onCancel={() => setCourseHeaderImageCameraOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Location Verification Modals */}
+      <AnimatePresence>
+        {locationModalOpen === 'tee' && currentHole.teeLocation && (
+          <LocationVerificationModal
+            isOpen={locationModalOpen === 'tee'}
+            onClose={() => setLocationModalOpen(null)}
+            location={currentHole.teeLocation}
+            locationName="Tee Location"
+            accuracy={teeAccuracy}
+          />
+        )}
+        {locationModalOpen === 'pin' && currentHole.pinLocation && (
+          <LocationVerificationModal
+            isOpen={locationModalOpen === 'pin'}
+            onClose={() => setLocationModalOpen(null)}
+            location={currentHole.pinLocation}
+            locationName="Pin Location"
+            accuracy={pinAccuracy}
+          />
+        )}
+        {locationModalOpen === 'editTee' && editingHoleData.teeLocation && (
+          <LocationVerificationModal
+            isOpen={locationModalOpen === 'editTee'}
+            onClose={() => setLocationModalOpen(null)}
+            location={editingHoleData.teeLocation}
+            locationName="Tee Location"
+            accuracy={editTeeAccuracy}
+          />
+        )}
+        {locationModalOpen === 'editPin' && editingHoleData.pinLocation && (
+          <LocationVerificationModal
+            isOpen={locationModalOpen === 'editPin'}
+            onClose={() => setLocationModalOpen(null)}
+            location={editingHoleData.pinLocation}
+            locationName="Pin Location"
+            accuracy={editPinAccuracy}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Manual Location Input Modals (for testing on desktop) */}
+      <AnimatePresence>
+        {manualLocationOpen === 'tee' && (
+          <ManualLocationInput
+            isOpen={manualLocationOpen === 'tee'}
+            onClose={() => setManualLocationOpen(null)}
+            onSubmit={handleManualTeeLoc}
+            initialLocation={currentHole.teeLocation || undefined}
+          />
+        )}
+        {manualLocationOpen === 'pin' && (
+          <ManualLocationInput
+            isOpen={manualLocationOpen === 'pin'}
+            onClose={() => setManualLocationOpen(null)}
+            onSubmit={handleManualPinLoc}
+            initialLocation={currentHole.pinLocation || undefined}
+          />
+        )}
+        {manualLocationOpen === 'editTee' && (
+          <ManualLocationInput
+            isOpen={manualLocationOpen === 'editTee'}
+            onClose={() => setManualLocationOpen(null)}
+            onSubmit={handleManualEditTeeLoc}
+            initialLocation={editingHoleData.teeLocation || undefined}
+          />
+        )}
+        {manualLocationOpen === 'editPin' && (
+          <ManualLocationInput
+            isOpen={manualLocationOpen === 'editPin'}
+            onClose={() => setManualLocationOpen(null)}
+            onSubmit={handleManualEditPinLoc}
+            initialLocation={editingHoleData.pinLocation || undefined}
           />
         )}
       </AnimatePresence>
