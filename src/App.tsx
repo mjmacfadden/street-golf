@@ -1,13 +1,14 @@
 import { useState, useEffect, ReactNode } from 'react';
 import { APIProvider } from '@vis.gl/react-google-maps';
-import { Map as MapIcon, List as ListIcon, History as HistoryIcon, Play, ChevronLeft, ChevronRight, Pencil, Flag, Trophy, Image as ImageIcon, X, Home, Info, AlertTriangle, Hammer, LogOut, User } from 'lucide-react';
+import { Map as MapIcon, List as ListIcon, History as HistoryIcon, Play, ChevronLeft, ChevronRight, Pencil, Flag, Trophy, Image as ImageIcon, X, Home, Info, AlertTriangle, Hammer, LogOut, User, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import MapView from './components/MapView';
 import Scorecard from './components/Scorecard';
 import CourseBuilder from './components/CourseBuilder';
+import { Profile } from './components/Profile';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AuthModal } from './components/AuthModal';
-import { getPublishedCourses, getUserCourses } from './utils/courseService';
+import { getPublishedCourses, getUserCourses, saveRound, getUserRounds, deleteRound as deleteRoundFromFirestore } from './utils/courseService';
 import type { Course as FirestoreCourse } from './utils/courseService';
 import { STREET_GOLF_COURSE, COURSES, type Course } from './constants/course';
 import { Round, Score } from './types';
@@ -26,9 +27,8 @@ export default function App() {
 
 function AppContent() {
   const { currentUser, loading } = useAuth();
-  const [activeTab, setActiveTab] = useState<'home' | 'map' | 'scorecard' | 'history' | 'builder'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'map' | 'scorecard' | 'history' | 'builder' | 'profile'>('home');
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
   
   // Courses
   const [availableCourses, setAvailableCourses] = useState<Course[]>(COURSES);
@@ -45,6 +45,8 @@ function AppContent() {
   const [lightboxImage, setLightboxImage] = useState<{ url: string; title: string } | null>(null);
   const [showTip, setShowTip] = useState(false);
   const [selectedHistoryRound, setSelectedHistoryRound] = useState<Round | null>(null);
+  const [deleteConfirmRound, setDeleteConfirmRound] = useState<string | null>(null);
+  const [editingCourse, setEditingCourse] = useState<FirestoreCourse | null>(null);
 
   // Convert Firestore course to local Course format
   const convertFirestoreCourse = (fsCourse: FirestoreCourse): Course => {
@@ -126,20 +128,65 @@ function AppContent() {
     }
   }, [availableCourses]);
 
-  // Load persistence
+  // Load persistence (Firestore for logged-in users, localStorage for guests)
   useEffect(() => {
-    const savedRound = localStorage.getItem('currentRound');
-    const savedHistory = localStorage.getItem('roundHistory');
-    
-    if (savedRound) setCurrentRound(JSON.parse(savedRound));
-    if (savedHistory) setHistory(JSON.parse(savedHistory));
-  }, []);
+    const loadData = async () => {
+      if (currentUser?.uid) {
+        try {
+          const userRounds = await getUserRounds(currentUser.uid);
+          setHistory(userRounds);
+        } catch (error) {
+          console.error('Failed to load rounds from Firestore:', error);
+          // Fall back to localStorage
+          const savedHistory = localStorage.getItem('roundHistory');
+          if (savedHistory) setHistory(JSON.parse(savedHistory));
+        }
+      } else {
+        // Guest user - load from localStorage
+        const savedRound = localStorage.getItem('currentRound');
+        const savedHistory = localStorage.getItem('roundHistory');
+        
+        if (savedRound) setCurrentRound(JSON.parse(savedRound));
+        if (savedHistory) setHistory(JSON.parse(savedHistory));
+      }
+    };
 
-  // Save persistence
+    if (!loading) {
+      loadData();
+    }
+  }, [currentUser, loading]);
+
+  // Save persistence (Firestore for logged-in users, localStorage for guests)
   useEffect(() => {
-    if (currentRound) localStorage.setItem('currentRound', JSON.stringify(currentRound));
-    localStorage.setItem('roundHistory', JSON.stringify(history));
-  }, [currentRound, history]);
+    const saveData = async () => {
+      if (currentUser?.uid) {
+        // Save to Firestore for logged-in users
+        if (currentRound) {
+          try {
+            await saveRound(currentUser.uid, currentRound);
+          } catch (error) {
+            console.error('Failed to save current round:', error);
+          }
+        }
+        if (history.length > 0) {
+          // Save each round to Firestore
+          for (const round of history) {
+            try {
+              await saveRound(currentUser.uid, round);
+            } catch (error) {
+              console.error('Failed to save round:', error);
+            }
+          }
+        }
+      } else {
+        // Save to localStorage for guests
+        if (currentRound) localStorage.setItem('currentRound', JSON.stringify(currentRound));
+        localStorage.setItem('roundHistory', JSON.stringify(history));
+      }
+    };
+
+    saveData();
+  }, [currentRound, history, currentUser]);
 
   const startNewRound = () => {
     const newRound: Round = {
@@ -147,7 +194,8 @@ function AppContent() {
       date: new Date().toISOString(),
       scores: {},
       isCompleted: false,
-      courseId: selectedCourse.id
+      courseId: selectedCourse.id,
+      courseName: selectedCourse.name
     };
     setCurrentRound(newRound);
     setCurrentHoleIdx(null);
@@ -188,6 +236,23 @@ function AppContent() {
     setCurrentHoleIdx(null);
     setActiveTab('history');
     localStorage.removeItem('currentRound');
+  };
+
+  const handleDeleteRound = async (roundId: string) => {
+    try {
+      if (currentUser?.uid) {
+        // Delete from Firestore for logged-in users
+        await deleteRoundFromFirestore(currentUser.uid, roundId);
+      }
+      // Remove from local history
+      setHistory(history.filter(r => r.id !== roundId));
+      // Also remove from localStorage for guests
+      localStorage.setItem('roundHistory', JSON.stringify(history.filter(r => r.id !== roundId)));
+      setDeleteConfirmRound(null);
+      setSelectedHistoryRound(null);
+    } catch (error) {
+      console.error('Failed to delete round:', error);
+    }
   };
 
   if (!hasValidKey) {
@@ -472,12 +537,13 @@ function AppContent() {
                 ) : (
                   <div className="space-y-4">
                     {history.map(round => {
-                      const roundCourse = COURSES.find(c => c.id === round.courseId);
+                      const roundCourse = availableCourses.find(c => c.id === round.courseId);
+                      const courseName = round.courseName || roundCourse?.name || 'Unknown Course';
                       return (<div key={round.id} className="bg-navy/50 p-5 rounded-2xl border border-white/5 backdrop-blur-sm transition-all hover:border-lime/30">
                         <div className="flex justify-between items-center mb-3">
                           <div>
                             <p className="text-xs font-black text-lime uppercase tracking-widest italic">{new Date(round.date).toLocaleDateString()}</p>
-                            {roundCourse && <p className="text-[10px] text-slate-400 uppercase tracking-wider mt-1">{roundCourse.name}</p>}
+                            <p className="text-[10px] text-slate-400 uppercase tracking-wider mt-1">{courseName}</p>
                           </div>
                           <p className="text-white/50 text-[10px] font-black uppercase">{roundCourse?.holes.length ?? 9} HOLES</p>
                         </div>
@@ -488,12 +554,20 @@ function AppContent() {
                             </p>
                             <p className="text-[10px] uppercase text-slate-500 font-black mt-1">Total strokes</p>
                           </div>
-                          <button 
-                            onClick={() => setSelectedHistoryRound(round)}
-                            className="p-3 bg-white/5 rounded-full text-lime transition-colors hover:bg-lime hover:text-dark"
-                          >
-                            <ChevronRight size={20} />
-                          </button>
+                          <div className="flex gap-2">
+                            <button 
+                              onClick={() => setSelectedHistoryRound(round)}
+                              className="p-3 bg-white/5 rounded-full text-lime transition-colors hover:bg-lime hover:text-dark"
+                            >
+                              <ChevronRight size={20} />
+                            </button>
+                            <button 
+                              onClick={() => setDeleteConfirmRound(round.id)}
+                              className="p-3 bg-white/5 rounded-full text-red-400 transition-colors hover:bg-red-500 hover:text-dark"
+                            >
+                              <Trash2 size={20} />
+                            </button>
+                          </div>
                         </div>
                       </div>);
                     })}
@@ -512,10 +586,34 @@ function AppContent() {
                 style={{ WebkitOverflowScrolling: 'touch' }}
               >
                 {currentUser ? (
-                  <CourseBuilder />
+                  <CourseBuilder 
+                    editingCourse={editingCourse || undefined}
+                    onCancel={() => setEditingCourse(null)}
+                  />
                 ) : (
                   <AuthModal onClose={() => setActiveTab('home')} />
                 )}
+              </motion.div>
+            )}
+
+            {activeTab === 'profile' && (
+              <motion.div 
+                key="profile"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="h-full"
+              >
+                <Profile 
+                  onLogout={() => setActiveTab('home')}
+                  onEditCourse={(course) => {
+                    setEditingCourse(course);
+                    setActiveTab('builder');
+                  }}
+                  onDeleteCourse={(courseId) => {
+                    setAvailableCourses(availableCourses.filter(c => c.id !== courseId));
+                  }}
+                />
               </motion.div>
             )}
           </AnimatePresence>
@@ -569,10 +667,9 @@ function AppContent() {
                     <div>
                       <h3 className="text-2xl font-black text-lime uppercase italic tracking-tight">Round Details</h3>
                       <p className="text-xs text-slate-400 mt-1">{new Date(selectedHistoryRound.date).toLocaleDateString()}</p>
-                      {(() => {
-                        const roundCourse = COURSES.find(c => c.id === selectedHistoryRound.courseId);
-                        return roundCourse && <p className="text-xs text-slate-500 mt-1">{roundCourse.name}</p>;
-                      })()}
+                      {selectedHistoryRound.courseName && (
+                        <p className="text-xs text-slate-500 mt-1">{selectedHistoryRound.courseName}</p>
+                      )}
                     </div>
                     <button 
                       onClick={() => setSelectedHistoryRound(null)}
@@ -584,7 +681,7 @@ function AppContent() {
 
                   <div className="space-y-3">
                     {(() => {
-                      const roundCourse = COURSES.find(c => c.id === selectedHistoryRound.courseId) || COURSES[0];
+                      const roundCourse = availableCourses.find(c => c.id === selectedHistoryRound.courseId) || availableCourses[0];
                       return roundCourse.holes.map((hole) => {
                         const score = selectedHistoryRound.scores[hole.number];
                         return (
@@ -615,6 +712,44 @@ function AppContent() {
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Delete Round Confirmation Modal */}
+          {deleteConfirmRound && (
+            <div
+              onClick={() => setDeleteConfirmRound(null)}
+              className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-6"
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-sm bg-navy/80 rounded-3xl p-6 border border-slate-700"
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <AlertTriangle className="text-red-500" size={24} />
+                  <h3 className="text-xl font-black text-red-500 uppercase">Delete Round?</h3>
+                </div>
+                <p className="text-slate-300 text-sm mb-6">
+                  This action cannot be undone. Your round history will be permanently deleted.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setDeleteConfirmRound(null)}
+                    className="flex-1 px-4 py-2 bg-white/10 rounded-lg text-white font-bold hover:bg-white/20 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => deleteConfirmRound && handleDeleteRound(deleteConfirmRound)}
+                    className="flex-1 px-4 py-2 bg-red-500 rounded-lg text-white font-bold hover:bg-red-600 transition-colors"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </motion.div>
             </div>
           )}
         </main>
@@ -657,32 +792,12 @@ function AppContent() {
               label="History" 
               onClick={() => setActiveTab('history')} 
             />
-          </div>
-
-          {/* User Profile Button */}
-          <div className="relative">
-            <button
-              onClick={() => setUserMenuOpen(!userMenuOpen)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
-                currentUser
-                  ? 'bg-lime/20 text-lime hover:bg-lime/30'
-                  : 'text-slate-500 hover:text-slate-300'
-              }`}
-            >
-              <User size={20} strokeWidth={2.5} />
-              {currentUser && (
-                <span className="text-xs font-bold uppercase hidden sm:inline">
-                  {currentUser.displayName?.split(' ')[0] || 'User'}
-                </span>
-              )}
-            </button>
-
-            {/* User Menu Dropdown */}
-            {userMenuOpen && (
-              <UserMenuDropdown 
-                currentUser={currentUser}
-                onClose={() => setUserMenuOpen(false)}
-                onShowAuth={() => setShowAuthModal(true)}
+            {currentUser && (
+              <NavButton 
+                active={activeTab === 'profile'} 
+                icon={<User strokeWidth={3} />} 
+                label="Profile" 
+                onClick={() => setActiveTab('profile')} 
               />
             )}
           </div>
@@ -708,57 +823,5 @@ function NavButton({ active, icon, label, onClick }: { active: boolean; icon: Re
       </div>
       <span className={`text-[10px] font-black uppercase tracking-tighter italic ${active ? 'text-lime' : ''}`}>{label}</span>
     </button>
-  );
-}
-
-function UserMenuDropdown({
-  currentUser,
-  onClose,
-  onShowAuth,
-}: {
-  currentUser: any;
-  onClose: () => void;
-  onShowAuth: () => void;
-}) {
-  const { logout } = useAuth();
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 8 }}
-      className="absolute bottom-full right-0 mb-2 bg-navy/95 border border-white/10 rounded-lg overflow-hidden w-40 shadow-lg"
-    >
-      {currentUser ? (
-        <>
-          <div className="px-4 py-3 border-b border-white/5">
-            <p className="text-xs text-slate-400 uppercase tracking-wider">Signed in as</p>
-            <p className="text-sm font-bold text-white truncate">
-              {currentUser.email}
-            </p>
-          </div>
-          <button
-            onClick={async () => {
-              await logout();
-              onClose();
-            }}
-            className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2 transition-colors"
-          >
-            <LogOut size={16} />
-            Sign Out
-          </button>
-        </>
-      ) : (
-        <button
-          onClick={() => {
-            onShowAuth();
-            onClose();
-          }}
-          className="w-full px-4 py-3 text-left text-sm font-bold text-lime hover:bg-lime/10 transition-colors"
-        >
-          Sign In
-        </button>
-      )}
-    </motion.div>
   );
 }

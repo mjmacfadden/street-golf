@@ -1,11 +1,14 @@
-import React, { useState, useRef } from 'react';
-import { MapPin, Image as ImageIcon, Trash2, Plus, AlertCircle, Loader, X } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { MapPin, Image as ImageIcon, Trash2, Plus, AlertCircle, Loader, X, ChevronLeft, Pencil } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { captureGPSLocation, formatAccuracy, isAccuracyGood } from '../utils/geolocation';
 import { uploadImage, validateImageFile } from '../utils/imageUpload';
 import { saveCourse } from '../utils/courseService';
 import { useAuth } from '../context/AuthContext';
 import CameraCapture from './CameraCapture';
+import type { Course as FirestoreCourse } from '../utils/courseService';
+import { db } from '../config/firebase';
+import { updateDoc, doc, Timestamp } from 'firebase/firestore';
 
 interface HoleInProgress {
   id: string;
@@ -21,7 +24,15 @@ interface HoleInProgress {
   hazard: boolean;
 }
 
-export default function CourseBuilder() {
+export default function CourseBuilder({ 
+  editingCourse, 
+  onEditComplete,
+  onCancel 
+}: { 
+  editingCourse?: FirestoreCourse;
+  onEditComplete?: () => void;
+  onCancel?: () => void;
+}) {
   const { currentUser } = useAuth();
   const teeCameraInputRef = useRef<HTMLInputElement>(null);
   const teeFileInputRef = useRef<HTMLInputElement>(null);
@@ -70,6 +81,39 @@ export default function CourseBuilder() {
     hazard: false,
   });
 
+  // Load course data when editing
+  useEffect(() => {
+    if (editingCourse) {
+      setCourseName(editingCourse.courseName);
+      const convertedHoles: HoleInProgress[] = editingCourse.holes.map(hole => ({
+        id: hole.id,
+        name: hole.name,
+        par: hole.par,
+        teeLocation: hole.teeLocation,
+        pinLocation: hole.pinLocation,
+        teeDescription: hole.teeDescription,
+        pinDescription: hole.pinDescription,
+        teeImage: hole.teeImage,
+        pinImage: hole.pinImage,
+        tip: hole.tip,
+        hazard: hole.hazard,
+      }));
+      setHoles(convertedHoles);
+      setCurrentHole({
+        name: '',
+        par: 3,
+        teeLocation: null,
+        pinLocation: null,
+        teeDescription: '',
+        pinDescription: '',
+        teeImage: null,
+        pinImage: null,
+        tip: '',
+        hazard: false,
+      });
+    }
+  }, [editingCourse]);
+
   const addHole = () => {
     if (currentHole.name && currentHole.teeLocation && currentHole.pinLocation) {
       const newHole: HoleInProgress = {
@@ -87,6 +131,8 @@ export default function CourseBuilder() {
       };
 
       setHoles([...holes, newHole]);
+      // Collapse the form after adding a hole
+      setExpandedHole(null);
       setCurrentHole({
         name: '',
         par: 3,
@@ -100,6 +146,24 @@ export default function CourseBuilder() {
         hazard: false,
       });
     }
+  };
+
+  const editHole = (hole: HoleInProgress) => {
+    // Load hole data into the form
+    setCurrentHole({
+      name: hole.name,
+      par: hole.par,
+      teeLocation: hole.teeLocation,
+      pinLocation: hole.pinLocation,
+      teeDescription: hole.teeDescription,
+      pinDescription: hole.pinDescription,
+      teeImage: hole.teeImage,
+      pinImage: hole.pinImage,
+      tip: hole.tip,
+      hazard: hole.hazard,
+    });
+    // Remove the hole from the list so it can be re-added with updates
+    removeHole(hole.id);
   };
 
   const removeHole = (id: string) => {
@@ -127,32 +191,64 @@ export default function CourseBuilder() {
     setPublishSuccess(false);
 
     try {
-      await saveCourse(currentUser.uid, {
-        courseName,
-        holes,
-        status: 'published',
-      });
-
-      setPublishSuccess(true);
-
-      // Reset form after 2 seconds
-      setTimeout(() => {
-        setCourseName('');
-        setHoles([]);
-        setCurrentHole({
-          name: '',
-          par: 3,
-          teeLocation: null,
-          pinLocation: null,
-          teeDescription: '',
-          pinDescription: '',
-          teeImage: null,
-          pinImage: null,
-          tip: '',
-          hazard: false,
+      if (editingCourse) {
+        // Update existing course
+        const courseRef = doc(db, 'users', currentUser.uid, 'courses', editingCourse.id);
+        
+        await updateDoc(courseRef, {
+          courseName,
+          holes,
+          updatedAt: Timestamp.now(),
         });
-        setPublishSuccess(false);
-      }, 2000);
+
+        setPublishSuccess(true);
+        setTimeout(() => {
+          onEditComplete?.();
+          setCourseName('');
+          setHoles([]);
+          setCurrentHole({
+            name: '',
+            par: 3,
+            teeLocation: null,
+            pinLocation: null,
+            teeDescription: '',
+            pinDescription: '',
+            teeImage: null,
+            pinImage: null,
+            tip: '',
+            hazard: false,
+          });
+          setPublishSuccess(false);
+        }, 2000);
+      } else {
+        // Create new course
+        await saveCourse(currentUser.uid, {
+          courseName,
+          holes,
+          status: 'published',
+        });
+
+        setPublishSuccess(true);
+
+        // Reset form after 2 seconds
+        setTimeout(() => {
+          setCourseName('');
+          setHoles([]);
+          setCurrentHole({
+            name: '',
+            par: 3,
+            teeLocation: null,
+            pinLocation: null,
+            teeDescription: '',
+            pinDescription: '',
+            teeImage: null,
+            pinImage: null,
+            tip: '',
+            hazard: false,
+          });
+          setPublishSuccess(false);
+        }, 2000);
+      }
     } catch (error) {
       if (error instanceof Error) {
         setPublishError(error.message);
@@ -874,15 +970,28 @@ export default function CourseBuilder() {
                         <p className="text-white/50 text-sm">Par {hole.par} {hole.hazard && '• Hazard'}</p>
                       </div>
                     </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removeHole(hole.id);
-                      }}
-                      className="p-2 hover:bg-red-500/20 rounded-lg text-white/50 hover:text-red-400 transition"
-                    >
-                      <Trash2 size={18} />
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          editHole(hole);
+                        }}
+                        className="p-2 hover:bg-lime/20 rounded-lg text-lime hover:text-lime transition"
+                        title="Edit hole"
+                      >
+                        <Pencil size={18} />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeHole(hole.id);
+                        }}
+                        className="p-2 hover:bg-red-500/20 rounded-lg text-white/50 hover:text-red-400 transition"
+                        title="Delete hole"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Expanded Details */}
@@ -944,29 +1053,45 @@ export default function CourseBuilder() {
           </motion.div>
         )}
 
-        {/* Publish Button */}
+        {/* Publish/Update Buttons */}
         {holes.length > 0 && (
-          <motion.button
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            onClick={publishCourse}
-            disabled={isPublishing}
-            className={`w-full py-4 rounded-xl font-black text-lg shadow-xl uppercase tracking-wider transition ${
-              isPublishing
-                ? 'bg-lime/50 text-dark/50 shadow-lime/10 cursor-not-allowed'
-                : 'bg-gradient-to-r from-lime to-lime/80 text-dark hover:shadow-lime/40 shadow-lime/20 cursor-pointer'
-            }`}
-          >
-            {isPublishing ? (
-              <div className="flex items-center justify-center gap-2">
-                <Loader size={20} className="animate-spin" />
-                Publishing...
-              </div>
-            ) : (
-              `Publish Course (${holes.length} ${holes.length === 1 ? 'Hole' : 'Holes'})`
+          <div className="flex gap-3">
+            {editingCourse && onCancel && (
+              <motion.button
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                onClick={onCancel}
+                className="flex-1 py-4 rounded-xl font-black text-lg shadow-xl uppercase tracking-wider transition bg-white/10 text-white hover:bg-white/20 border border-white/20"
+              >
+                <ChevronLeft size={20} className="inline mr-2" />
+                Cancel
+              </motion.button>
             )}
-          </motion.button>
+            <motion.button
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              onClick={publishCourse}
+              disabled={isPublishing}
+              className={`flex-1 py-4 rounded-xl font-black text-lg shadow-xl uppercase tracking-wider transition ${
+                isPublishing
+                  ? 'bg-lime/50 text-dark/50 shadow-lime/10 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-lime to-lime/80 text-dark hover:shadow-lime/40 shadow-lime/20 cursor-pointer'
+              }`}
+            >
+              {isPublishing ? (
+                <div className="flex items-center justify-center gap-2">
+                  <Loader size={20} className="animate-spin" />
+                  {editingCourse ? 'Updating...' : 'Publishing...'}
+                </div>
+              ) : (
+                <>
+                  {editingCourse ? 'Update Course' : `Publish Course (${holes.length} ${holes.length === 1 ? 'Hole' : 'Holes'})`}
+                </>
+              )}
+            </motion.button>
+          </div>
         )}
 
         {/* Empty State */}

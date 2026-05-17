@@ -1,4 +1,4 @@
-import { db } from '../config/firebase';
+import { db, storage } from '../config/firebase';
 import {
   collection,
   doc,
@@ -9,7 +9,10 @@ import {
   where,
   orderBy,
   Timestamp,
+  deleteDoc,
 } from 'firebase/firestore';
+import { ref, deleteObject } from 'firebase/storage';
+import type { Round } from '../types';
 
 export interface CourseHole {
   id: string;
@@ -87,20 +90,25 @@ export const saveCourse = async (
 
     await setDoc(courseRef, courseData);
 
-    // If publishing, also add to public courses collection
+    // If publishing, also add to public courses collection (non-blocking)
     if (course.status === 'published') {
-      const publicRef = doc(db, 'courses', courseId);
-      await setDoc(publicRef, {
-        id: courseId,
-        userId,
-        courseName: course.courseName,
-        holesCount: course.holes.length,
-        createdAt: Timestamp.fromDate(now),
-        publishedAt: Timestamp.fromDate(now),
-        // Store first tee and pin images for preview
-        previewTeeImage: course.holes[0]?.teeImage || null,
-        previewPinImage: course.holes[0]?.pinImage || null,
-      });
+      try {
+        const publicRef = doc(db, 'courses', courseId);
+        await setDoc(publicRef, {
+          id: courseId,
+          userId,
+          courseName: course.courseName,
+          holesCount: course.holes.length,
+          createdAt: Timestamp.fromDate(now),
+          publishedAt: Timestamp.fromDate(now),
+          // Store first tee and pin images for preview
+          previewTeeImage: course.holes[0]?.teeImage || null,
+          previewPinImage: course.holes[0]?.pinImage || null,
+        });
+      } catch (err) {
+        console.warn('Failed to add course to public collection (non-blocking):', err);
+        // Don't fail the entire operation - course is already saved privately
+      }
     }
 
     return courseId;
@@ -148,18 +156,23 @@ export const publishCourse = async (
 
     await setDoc(courseRef, publishedData);
 
-    // Add to public courses collection
-    const publicRef = doc(db, 'courses', courseId);
-    await setDoc(publicRef, {
-      id: courseId,
-      userId,
-      courseName: course.courseName,
-      holesCount: course.holes.length,
-      createdAt: course.createdAt,
-      publishedAt: Timestamp.fromDate(now),
-      previewTeeImage: course.holes[0]?.teeImage || null,
-      previewPinImage: course.holes[0]?.pinImage || null,
-    });
+    // Add to public courses collection (non-blocking)
+    try {
+      const publicRef = doc(db, 'courses', courseId);
+      await setDoc(publicRef, {
+        id: courseId,
+        userId,
+        courseName: course.courseName,
+        holesCount: course.holes.length,
+        createdAt: course.createdAt,
+        publishedAt: Timestamp.fromDate(now),
+        previewTeeImage: course.holes[0]?.teeImage || null,
+        previewPinImage: course.holes[0]?.pinImage || null,
+      });
+    } catch (err) {
+      console.warn('Failed to add course to public collection (non-blocking):', err);
+      // Don't fail the entire operation - course is already updated privately
+    }
 
     return publishedData;
   } catch (error) {
@@ -261,5 +274,127 @@ export const getCourse = async (
       throw new Error(`Failed to fetch course: ${error.message}`);
     }
     throw new Error('Failed to fetch course: Unknown error');
+  }
+};
+
+/**
+ * Delete a course and all associated images
+ * @param userId - User ID (owner)
+ * @param courseId - Course ID to delete
+ */
+export const deleteCourse = async (
+  userId: string,
+  courseId: string
+): Promise<void> => {
+  try {
+    // Get course data first to delete associated images
+    const courseRef = doc(db, 'users', userId, 'courses', courseId);
+    const courseSnap = await getDoc(courseRef);
+
+    if (courseSnap.exists()) {
+      const course = courseSnap.data() as Course;
+
+      // Delete all images from Firebase Storage
+      for (const hole of course.holes) {
+        if (hole.teeImage) {
+          try {
+            const teeRef = ref(storage, hole.teeImage);
+            await deleteObject(teeRef);
+          } catch (err) {
+            console.warn('Failed to delete tee image:', err);
+          }
+        }
+
+        if (hole.pinImage) {
+          try {
+            const pinRef = ref(storage, hole.pinImage);
+            await deleteObject(pinRef);
+          } catch (err) {
+            console.warn('Failed to delete pin image:', err);
+          }
+        }
+      }
+    }
+
+    // Delete the course document
+    await deleteDoc(courseRef);
+
+    // Delete from public courses if published
+    const publicRef = doc(db, 'courses', courseId);
+    try {
+      await deleteDoc(publicRef);
+    } catch (err) {
+      console.warn('Failed to delete public course reference:', err);
+    }
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(`Failed to delete course: ${error.message}`);
+    }
+    throw new Error('Failed to delete course: Unknown error');
+  }
+};
+
+/**
+ * Save a round for a logged-in user
+ * @param userId - User ID (owner)
+ * @param round - Round data
+ */
+export const saveRound = async (userId: string, round: Round): Promise<void> => {
+  try {
+    const roundRef = doc(db, 'users', userId, 'rounds', round.id);
+    const roundData = {
+      ...round,
+      date: round.date, // Keep as ISO string
+      createdAt: Timestamp.now(),
+    };
+    await setDoc(roundRef, roundData, { merge: true });
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(`Failed to save round: ${error.message}`);
+    }
+    throw new Error('Failed to save round: Unknown error');
+  }
+};
+
+/**
+ * Get all rounds for a user
+ * @param userId - User ID
+ * @returns Array of rounds, sorted by date descending
+ */
+export const getUserRounds = async (userId: string): Promise<Round[]> => {
+  try {
+    const roundsRef = collection(db, 'users', userId, 'rounds');
+    const q = query(roundsRef, orderBy('date', 'desc'));
+    const snapshot = await getDocs(q);
+
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      date: doc.data().date,
+      scores: doc.data().scores,
+      isCompleted: doc.data().isCompleted,
+      courseId: doc.data().courseId,
+    })) as Round[];
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(`Failed to fetch rounds: ${error.message}`);
+    }
+    throw new Error('Failed to fetch rounds: Unknown error');
+  }
+};
+
+/**
+ * Delete a round
+ * @param userId - User ID (owner)
+ * @param roundId - Round ID to delete
+ */
+export const deleteRound = async (userId: string, roundId: string): Promise<void> => {
+  try {
+    const roundRef = doc(db, 'users', userId, 'rounds', roundId);
+    await deleteDoc(roundRef);
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(`Failed to delete round: ${error.message}`);
+    }
+    throw new Error('Failed to delete round: Unknown error');
   }
 };

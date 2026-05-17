@@ -25,4 +25,5 @@ export interface Round {
   scores: Record<number, Score>;
   isCompleted: boolean;
   courseId?: string;
+  courseName?: string;
 }
