@@ -458,18 +458,61 @@ export const getUserFavorites = async (userId: string): Promise<string[]> => {
  */
 export const getAllCourses = async (): Promise<(Course & { creatorName?: string; creatorEmail?: string })[]> => {
   try {
-    const coursesQuery = collection(db, 'courses');
-    const snapshot = await getDocs(coursesQuery);
-    const courses = snapshot.docs.map(doc => {
+    // Fetch all published courses from /courses collection
+    const publishedSnapshot = await getDocs(collection(db, 'courses'));
+    const allCourses = new Map<string, Course & { creatorName?: string; creatorEmail?: string }>();
+    
+    publishedSnapshot.docs.forEach(doc => {
       const data = doc.data();
-      return {
+      allCourses.set(doc.id, {
         ...data,
         id: doc.id,
         createdAt: data.createdAt?.toDate?.() || new Date(),
         updatedAt: data.updatedAt?.toDate?.() || new Date(),
         publishedAt: data.publishedAt?.toDate?.(),
-      } as Course & { creatorName?: string; creatorEmail?: string };
+      } as Course & { creatorName?: string; creatorEmail?: string });
     });
+
+    // Try to fetch all user courses to include unpublished ones (admin only)
+    try {
+      const usersSnapshot = await getDocs(collection(db, 'users'));
+      
+      for (const userDoc of usersSnapshot.docs) {
+        const userId = userDoc.id;
+        const userData = userDoc.data();
+        
+        // Get all courses for this user
+        const userCoursesSnapshot = await getDocs(collection(db, 'users', userId, 'courses'));
+        
+        userCoursesSnapshot.docs.forEach(courseDoc => {
+          const courseId = courseDoc.id;
+          const data = courseDoc.data();
+          
+          // Only add if not already in map (published courses take precedence)
+          if (!allCourses.has(courseId)) {
+            allCourses.set(courseId, {
+              ...data,
+              id: courseId,
+              createdAt: data.createdAt?.toDate?.() || new Date(),
+              updatedAt: data.updatedAt?.toDate?.() || new Date(),
+              publishedAt: data.publishedAt?.toDate?.(),
+              creatorName: userData.displayName,
+              creatorEmail: userData.email,
+            } as Course & { creatorName?: string; creatorEmail?: string });
+          }
+        });
+      }
+    } catch (permissionError: any) {
+      // If we don't have permission to read all users, just return published courses
+      // This is expected for non-admin users
+      if (permissionError?.code === 'permission-denied') {
+        console.debug('Admin access not available, returning published courses only');
+      } else {
+        console.warn('Error fetching unpublished courses:', permissionError);
+      }
+    }
+
+    const courses = Array.from(allCourses.values());
     return courses.sort((a, b) => (b.createdAt?.getTime?.() || 0) - (a.createdAt?.getTime?.() || 0));
   } catch (error) {
     console.error('Failed to fetch all courses:', error);
@@ -499,21 +542,37 @@ export const getAllUsers = async (): Promise<AdminUser[]> => {
       const userData = userDoc.data();
       
       // Count user's courses
-      const coursesRef = collection(db, 'users', uid, 'courses');
-      const coursesSnapshot = await getDocs(coursesRef);
+      let courseCount = 0;
+      try {
+        const coursesRef = collection(db, 'users', uid, 'courses');
+        const coursesSnapshot = await getDocs(coursesRef);
+        courseCount = coursesSnapshot.size;
+      } catch (courseError: any) {
+        // If we can't read this user's courses, set count to 0
+        if (courseError?.code === 'permission-denied') {
+          console.debug(`No permission to read courses for user ${uid}`);
+        } else {
+          console.warn(`Failed to fetch courses for user ${uid}:`, courseError);
+        }
+        courseCount = 0;
+      }
       
       users.push({
         uid,
         displayName: userData.displayName,
         email: userData.email,
-        courseCount: coursesSnapshot.size,
+        courseCount,
         createdAt: userData.createdAt?.toDate?.(),
       });
     }
 
     return users.sort((a, b) => (b.createdAt?.getTime?.() || 0) - (a.createdAt?.getTime?.() || 0));
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to fetch all users:', error);
+    // If we can't read users at all, return empty (requires admin permissions)
+    if (error?.code === 'permission-denied') {
+      console.debug('Admin access not available for user listing');
+    }
     return [];
   }
 };

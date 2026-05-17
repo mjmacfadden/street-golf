@@ -48,6 +48,7 @@ function AppContent() {
   const [selectedHistoryRound, setSelectedHistoryRound] = useState<Round | null>(null);
   const [deleteConfirmRound, setDeleteConfirmRound] = useState<string | null>(null);
   const [editingCourse, setEditingCourse] = useState<FirestoreCourse | null>(null);
+  const [courseRefreshTrigger, setCourseRefreshTrigger] = useState(0);
 
   // Convert Firestore course to local Course format
   const convertFirestoreCourse = (fsCourse: FirestoreCourse): Course => {
@@ -121,7 +122,7 @@ function AppContent() {
     if (!loading) {
       fetchCourses();
     }
-  }, [currentUser, loading]);
+  }, [currentUser, loading, courseRefreshTrigger]);
 
   // Ensure selectedCourse is valid when availableCourses changes
   useEffect(() => {
@@ -130,7 +131,7 @@ function AppContent() {
     }
   }, [availableCourses]);
 
-  // Load persistence (Firestore for logged-in users, localStorage for guests)
+  // Load persistence (Firestore for logged-in users, localStorage for guests only)
   useEffect(() => {
     const loadData = async () => {
       if (currentUser?.uid) {
@@ -139,12 +140,11 @@ function AppContent() {
           setHistory(userRounds);
         } catch (error) {
           console.error('Failed to load rounds from Firestore:', error);
-          // Fall back to localStorage
-          const savedHistory = localStorage.getItem('roundHistory');
-          if (savedHistory) setHistory(JSON.parse(savedHistory));
+          // For logged-in users, do NOT fall back to localStorage
+          setHistory([]);
         }
       } else {
-        // Guest user - load from localStorage
+        // Guest user - load from localStorage only
         const savedRound = localStorage.getItem('currentRound');
         const savedHistory = localStorage.getItem('roundHistory');
         
@@ -197,7 +197,7 @@ function AppContent() {
       scores: {},
       isCompleted: false,
       courseId: selectedCourse.id,
-      courseName: selectedCourse.name
+      courseName: 'name' in selectedCourse ? selectedCourse.name : selectedCourse.courseName
     };
     setCurrentRound(newRound);
     setCurrentHoleIdx(null);
@@ -237,19 +237,23 @@ function AppContent() {
     setCurrentRound(null);
     setCurrentHoleIdx(null);
     setActiveTab('history');
-    localStorage.removeItem('currentRound');
+    // Only remove from localStorage for guest users
+    if (!currentUser?.uid) {
+      localStorage.removeItem('currentRound');
+    }
   };
 
   const handleDeleteRound = async (roundId: string) => {
     try {
       if (currentUser?.uid) {
-        // Delete from Firestore for logged-in users
+        // Delete from Firestore for logged-in users only
         await deleteRoundFromFirestore(currentUser.uid, roundId);
+      } else {
+        // Remove from localStorage for guests only
+        localStorage.setItem('roundHistory', JSON.stringify(history.filter(r => r.id !== roundId)));
       }
-      // Remove from local history
+      // Remove from local history state
       setHistory(history.filter(r => r.id !== roundId));
-      // Also remove from localStorage for guests
-      localStorage.setItem('roundHistory', JSON.stringify(history.filter(r => r.id !== roundId)));
       setDeleteConfirmRound(null);
       setSelectedHistoryRound(null);
     } catch (error) {
@@ -568,6 +572,7 @@ function AppContent() {
                   <CourseBuilder 
                     editingCourse={editingCourse || undefined}
                     onCancel={() => setEditingCourse(null)}
+                    onCourseSaved={() => setCourseRefreshTrigger(prev => prev + 1)}
                   />
                 ) : (
                   <AuthModal onClose={() => setActiveTab('home')} />

@@ -29,11 +29,13 @@ interface HoleInProgress {
 export default function CourseBuilder({ 
   editingCourse, 
   onEditComplete,
-  onCancel 
+  onCancel,
+  onCourseSaved
 }: { 
   editingCourse?: FirestoreCourse;
   onEditComplete?: () => void;
   onCancel?: () => void;
+  onCourseSaved?: () => void;
 }) {
   const { currentUser } = useAuth();
   const teeCameraInputRef = useRef<HTMLInputElement>(null);
@@ -289,6 +291,7 @@ export default function CourseBuilder({
         setPublishSuccess(true);
         setTimeout(() => {
           onEditComplete?.();
+          onCourseSaved?.();
           setCourseName('');
           setHoles([]);
           setCurrentHole({
@@ -317,6 +320,7 @@ export default function CourseBuilder({
         });
 
         setPublishSuccess(true);
+        onCourseSaved?.();
 
         // Reset form after 2 seconds
         setTimeout(() => {

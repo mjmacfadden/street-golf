@@ -19,6 +19,7 @@ export default function Home({ courses, onSelectCourse, onPlayNow, loading = fal
   const [currentIndex, setCurrentIndex] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showSearchResults, setShowSearchResults] = useState(false);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [favLoading, setFavLoading] = useState(false);
   const [showFavoriteLoginModal, setShowFavoriteLoginModal] = useState(false);
@@ -38,7 +39,7 @@ export default function Home({ courses, onSelectCourse, onPlayNow, loading = fal
     return name.toLowerCase().includes(searchTerm.toLowerCase());
   });
 
-  const displayCourses = searchTerm ? filteredCourses : courses;
+  const displayCourses = courses;
   const currentCourse = displayCourses[currentIndex];
 
   const handlePrevious = () => {
@@ -112,18 +113,10 @@ export default function Home({ courses, onSelectCourse, onPlayNow, loading = fal
     );
   }
 
-  if (displayCourses.length === 0) {
+  if (displayCourses.length === 0 && !searchTerm) {
     return (
       <div className="h-full flex items-center justify-center bg-dark flex-col gap-4">
         <div className="text-white text-xl font-bold">No courses found</div>
-        {searchTerm && (
-          <button
-            onClick={() => setSearchTerm('')}
-            className="text-lime font-bold hover:underline"
-          >
-            Clear search
-          </button>
-        )}
       </div>
     );
   }
@@ -169,6 +162,87 @@ export default function Home({ courses, onSelectCourse, onPlayNow, loading = fal
         )}
       </AnimatePresence>
 
+      {/* Search Results Modal */}
+      <AnimatePresence>
+        {showSearchResults && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowSearchResults(false)}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-dark rounded-2xl border border-white/10 max-w-md w-full max-h-[80vh] flex flex-col"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between p-6 border-b border-white/10">
+                <h2 className="text-xl font-black text-white uppercase italic">
+                  Search Results
+                </h2>
+                <button
+                  onClick={() => setShowSearchResults(false)}
+                  className="p-1 hover:bg-white/20 rounded-lg transition"
+                >
+                  <X size={20} className="text-white" />
+                </button>
+              </div>
+
+              {/* Results List */}
+              <div className="flex-1 overflow-y-auto">
+                {filteredCourses.length === 0 ? (
+                  <div className="p-6 text-center text-white/60">
+                    No courses found matching "{searchTerm}"
+                  </div>
+                ) : (
+                  <div className="p-4 space-y-2">
+                    {filteredCourses.map((course, idx) => (
+                      <motion.button
+                        key={idx}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: idx * 0.05 }}
+                        onClick={() => {
+                          setCurrentIndex(courses.indexOf(course));
+                          setShowSearchResults(false);
+                          setSearchTerm('');
+                          onSelectCourse(course);
+                        }}
+                        className="w-full text-left p-4 rounded-lg bg-slate-900/50 hover:bg-lime/20 border border-slate-700 hover:border-lime/50 transition group"
+                      >
+                        <h3 className="font-bold text-white group-hover:text-lime transition">
+                          {'courseName' in course ? course.courseName : course.name}
+                        </h3>
+                        <div className="flex gap-4 mt-1 text-xs text-white/60 group-hover:text-white/80">
+                          <span>{course.holes.length} holes</span>
+                          {'creatorName' in course && course.creatorName && (
+                            <span>By: {course.creatorName}</span>
+                          )}
+                          {'location' in course && course.location && (
+                            <span>{course.location}</span>
+                          )}
+                        </div>
+                      </motion.button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="border-t border-white/10 p-4 bg-slate-900/30">
+                <p className="text-xs text-white/60 text-center">
+                  Click a course to view
+                </p>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Course Carousel */}
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="flex-1 relative bg-black">
@@ -176,7 +250,7 @@ export default function Home({ courses, onSelectCourse, onPlayNow, loading = fal
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="absolute top-0 left-0 right-0 z-20 p-4"
+            className="absolute top-4 left-0 right-0 z-20 p-4"
           >
             <div className="flex items-center gap-2 max-w-2xl mx-auto">
               <motion.div
@@ -190,7 +264,16 @@ export default function Home({ courses, onSelectCourse, onPlayNow, loading = fal
                     value={searchTerm}
                     onChange={(e) => {
                       setSearchTerm(e.target.value);
-                      setCurrentIndex(0);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        setShowSearchResults(true);
+                        setSearchOpen(false);
+                      }
+                      if (e.key === 'Escape') {
+                        setSearchOpen(false);
+                        setSearchTerm('');
+                      }
                     }}
                     placeholder="Search courses..."
                     className="flex-1 px-4 py-2 bg-black/40 border border-white/30 rounded-lg text-white placeholder-white/60 focus:outline-none focus:border-lime/50 focus:bg-black/50"
@@ -203,9 +286,9 @@ export default function Home({ courses, onSelectCourse, onPlayNow, loading = fal
                   onClick={() => {
                     setSearchOpen(false);
                     setSearchTerm('');
-                    setCurrentIndex(0);
                   }}
                   className="p-2 hover:bg-white/20 rounded-lg text-white transition"
+                  title="Close search"
                 >
                   <X size={20} />
                 </button>
@@ -213,6 +296,7 @@ export default function Home({ courses, onSelectCourse, onPlayNow, loading = fal
                 <button
                   onClick={() => setSearchOpen(true)}
                   className="p-2 hover:bg-white/20 rounded-lg text-white transition"
+                  title="Search courses"
                 >
                   <Search size={20} />
                 </button>
@@ -241,21 +325,24 @@ export default function Home({ courses, onSelectCourse, onPlayNow, loading = fal
                 <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/80" />
 
                 {/* Play Now Button */}
-                <motion.button
+                <motion.div
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ delay: 0.2 }}
-                  onClick={() => {
-                    onSelectCourse(currentCourse);
-                    onPlayNow();
-                  }}
-                  className="absolute inset-0 flex items-center justify-center group cursor-pointer"
+                  className="absolute inset-0 flex items-center justify-center pointer-events-none"
                 >
-                  <div className="flex flex-col items-center gap-3 bg-black/40 hover:bg-black/60 rounded-full p-6 transition backdrop-blur-sm">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectCourse(currentCourse);
+                      onPlayNow();
+                    }}
+                    className="flex flex-col items-center gap-3 bg-black/40 hover:bg-black/60 rounded-full p-6 transition backdrop-blur-sm cursor-pointer z-10 pointer-events-auto"
+                  >
                     <Play size={48} className="text-lime fill-lime" />
                     <span className="text-white font-bold text-lg">Play Now</span>
-                  </div>
-                </motion.button>
+                  </button>
+                </motion.div>
 
                 {/* Navigation Arrows */}
                 {displayCourses.length > 1 && (
