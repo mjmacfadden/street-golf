@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trash2, ChevronLeft, AlertTriangle, Loader } from 'lucide-react';
+import { Trash2, ChevronLeft, AlertTriangle, Loader, Download, ChevronDown } from 'lucide-react';
 import {
   getAllCourses,
   getAllUsers,
@@ -22,6 +22,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose }) => {
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ type: 'user' | 'course'; id: string; name: string } | null>(null);
+  const [expandedUser, setExpandedUser] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -74,6 +75,48 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose }) => {
     } finally {
       setDeleting(null);
     }
+  };
+
+  const exportToCSV = () => {
+    // Prepare data for CSV
+    const csvRows = [
+      ['User Email', 'User Name', 'User UID', 'Course Name', 'Holes', 'Status', 'Created Date'],
+    ];
+
+    // Add user and course data
+    users.forEach(user => {
+      const userCourses = courses.filter(c => c.userId === user.uid);
+      if (userCourses.length > 0) {
+        userCourses.forEach((course, idx) => {
+          csvRows.push([
+            user.email || '',
+            user.displayName || '',
+            user.uid,
+            course.courseName,
+            String(course.holes.length),
+            course.status || 'draft',
+            course.createdAt?.toLocaleDateString?.() || '',
+          ]);
+        });
+      } else {
+        // Show user even if they have no courses
+        csvRows.push([user.email || '', user.displayName || '', user.uid, '', '', '', '']);
+      }
+    });
+
+    // Convert to CSV string
+    const csvContent = csvRows.map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+
+    // Download
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `users-courses-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
   };
 
   return (
@@ -164,6 +207,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose }) => {
         {/* Users View */}
         {view === 'users' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-bold text-gray-900">Users & Courses</h2>
+              <button
+                onClick={exportToCSV}
+                disabled={loading || users.length === 0}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Export all users and courses to CSV"
+              >
+                <Download size={18} />
+                Export CSV
+              </button>
+            </div>
+
             {loading ? (
               <div className="flex justify-center py-12">
                 <Loader className="animate-spin text-blue-600" size={32} />
@@ -171,39 +227,118 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onClose }) => {
             ) : users.length === 0 ? (
               <div className="text-center py-12 text-gray-500">No users found</div>
             ) : (
-              users.map(user => (
-                <motion.div
-                  key={user.uid}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className="bg-gray-50 border border-gray-300 rounded-2xl p-4 hover:bg-gray-100 transition-colors"
-                >
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-bold text-gray-900 truncate">{user.displayName || 'Unknown'}</h3>
-                      <p className="text-xs text-gray-600 truncate">{user.email}</p>
-                      <div className="flex gap-4 mt-2 text-xs text-gray-600">
-                        <span>UID: {user.uid.slice(0, 12)}...</span>
-                        <span>{user.courseCount} course{user.courseCount !== 1 ? 's' : ''}</span>
+              users.map(user => {
+                const userCourses = courses.filter(c => c.userId === user.uid);
+                const isExpanded = expandedUser === user.uid;
+                return (
+                  <motion.div
+                    key={user.uid}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="bg-gray-50 border border-gray-300 rounded-2xl overflow-hidden"
+                  >
+                    <div
+                      onClick={() => setExpandedUser(isExpanded ? null : user.uid)}
+                      className="p-4 hover:bg-gray-100 transition-colors cursor-pointer"
+                    >
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <ChevronDown
+                            size={20}
+                            className={`text-gray-600 transition-transform flex-shrink-0 ${
+                              isExpanded ? 'rotate-180' : ''
+                            }`}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-bold text-gray-900 truncate">{user.displayName || 'Unknown'}</h3>
+                            <p className="text-xs text-gray-600 truncate">{user.email}</p>
+                            <div className="flex gap-4 mt-2 text-xs text-gray-600">
+                              <span>UID: {user.uid.slice(0, 12)}...</span>
+                              <span className="font-semibold text-blue-600">
+                                {user.courseCount} course{user.courseCount !== 1 ? 's' : ''}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={e => {
+                            e.stopPropagation();
+                            setConfirmDelete({
+                              type: 'user',
+                              id: user.uid,
+                              name: user.displayName || user.email || 'User',
+                            });
+                          }}
+                          disabled={deleting === user.uid}
+                          className="p-2 hover:bg-red-200 text-red-600 rounded-lg transition-colors disabled:opacity-50 flex-shrink-0"
+                          title="Delete user and all data"
+                        >
+                          {deleting === user.uid ? <Loader size={18} className="animate-spin" /> : <Trash2 size={18} />}
+                        </button>
                       </div>
                     </div>
-                    <button
-                      onClick={() =>
-                        setConfirmDelete({
-                          type: 'user',
-                          id: user.uid,
-                          name: user.displayName || user.email || 'User',
-                        })
-                      }
-                      disabled={deleting === user.uid}
-                      className="p-2 hover:bg-red-200 text-red-600 rounded-lg transition-colors disabled:opacity-50"
-                      title="Delete user and all data"
-                    >
-                      {deleting === user.uid ? <Loader size={18} className="animate-spin" /> : <Trash2 size={18} />}
-                    </button>
-                  </div>
-                </motion.div>
-              ))
+
+                    {/* Expanded courses list */}
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          className="border-t border-gray-300 bg-white"
+                        >
+                          {userCourses.length === 0 ? (
+                            <div className="p-4 text-center text-gray-500 text-sm">No courses</div>
+                          ) : (
+                            <div className="divide-y divide-gray-200">
+                              {userCourses.map(course => (
+                                <div key={course.id} className="p-4 hover:bg-gray-50 transition-colors">
+                                  <div className="flex items-start justify-between gap-4">
+                                    <div className="flex-1 min-w-0">
+                                      <h4 className="font-semibold text-gray-900 truncate">{course.courseName}</h4>
+                                      <div className="flex gap-4 mt-1 text-xs text-gray-600">
+                                        <span>{course.holes.length} holes</span>
+                                        <span
+                                          className={
+                                            course.status === 'published'
+                                              ? 'text-green-600 font-semibold'
+                                              : 'text-gray-600'
+                                          }
+                                        >
+                                          {course.status || 'draft'}
+                                        </span>
+                                        <span>{course.createdAt?.toLocaleDateString?.()}</span>
+                                      </div>
+                                    </div>
+                                    <button
+                                      onClick={() =>
+                                        setConfirmDelete({
+                                          type: 'course',
+                                          id: course.id,
+                                          name: course.courseName,
+                                        })
+                                      }
+                                      disabled={deleting === course.id}
+                                      className="p-2 hover:bg-red-200 text-red-600 rounded-lg transition-colors disabled:opacity-50 flex-shrink-0"
+                                      title="Delete course"
+                                    >
+                                      {deleting === course.id ? (
+                                        <Loader size={16} className="animate-spin" />
+                                      ) : (
+                                        <Trash2 size={16} />
+                                      )}
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
+                );
+              })
             )}
           </motion.div>
         )}

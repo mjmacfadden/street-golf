@@ -6,6 +6,8 @@ import { AuthModal } from './AuthModal';
 import { AdminPanel } from './AdminPanel';
 import { getUserCourses, deleteCourse, getUserFavorites, removeFavorite, getPublishedCourses, type Course as FirestoreCourse } from '../utils/courseService';
 
+const ADMIN_UID = import.meta.env.VITE_ADMIN_UID || '';
+
 interface ProfileProps {
   onEditCourse?: (course: FirestoreCourse) => void;
   onLogout?: () => void;
@@ -114,7 +116,7 @@ export const Profile: React.FC<ProfileProps> = ({ onEditCourse, onLogout, onDele
                 {currentUser.displayName || 'User'}
               </h2>
               <p className="text-lime font-bold text-sm">{currentUser.email}</p>
-              {currentUser.uid === 'NboBOK41rVcAEcs6nhRmrALQ0KC2' && (
+              {currentUser.uid === ADMIN_UID && (
                 <button
                   onClick={() => setShowAdminPanel(true)}
                   className="inline-block mt-2 text-xs font-bold text-yellow-400 hover:text-yellow-300 bg-yellow-500/10 hover:bg-yellow-500/20 px-3 py-1 rounded-lg border border-yellow-500/30 transition-colors"
