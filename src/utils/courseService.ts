@@ -452,3 +452,119 @@ export const getUserFavorites = async (userId: string): Promise<string[]> => {
     return [];
   }
 };
+
+/**
+ * ADMIN: Get all courses in the system
+ */
+export const getAllCourses = async (): Promise<(Course & { creatorName?: string; creatorEmail?: string })[]> => {
+  try {
+    const coursesQuery = collection(db, 'courses');
+    const snapshot = await getDocs(coursesQuery);
+    const courses = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        ...data,
+        id: doc.id,
+        createdAt: data.createdAt?.toDate?.() || new Date(),
+        updatedAt: data.updatedAt?.toDate?.() || new Date(),
+        publishedAt: data.publishedAt?.toDate?.(),
+      } as Course & { creatorName?: string; creatorEmail?: string };
+    });
+    return courses.sort((a, b) => (b.createdAt?.getTime?.() || 0) - (a.createdAt?.getTime?.() || 0));
+  } catch (error) {
+    console.error('Failed to fetch all courses:', error);
+    return [];
+  }
+};
+
+/**
+ * ADMIN: Get all users in the system
+ */
+export interface AdminUser {
+  uid: string;
+  displayName?: string;
+  email?: string;
+  courseCount: number;
+  createdAt?: Date;
+}
+
+export const getAllUsers = async (): Promise<AdminUser[]> => {
+  try {
+    const usersQuery = collection(db, 'users');
+    const snapshot = await getDocs(usersQuery);
+    const users: AdminUser[] = [];
+
+    for (const userDoc of snapshot.docs) {
+      const uid = userDoc.id;
+      const userData = userDoc.data();
+      
+      // Count user's courses
+      const coursesRef = collection(db, 'users', uid, 'courses');
+      const coursesSnapshot = await getDocs(coursesRef);
+      
+      users.push({
+        uid,
+        displayName: userData.displayName,
+        email: userData.email,
+        courseCount: coursesSnapshot.size,
+        createdAt: userData.createdAt?.toDate?.(),
+      });
+    }
+
+    return users.sort((a, b) => (b.createdAt?.getTime?.() || 0) - (a.createdAt?.getTime?.() || 0));
+  } catch (error) {
+    console.error('Failed to fetch all users:', error);
+    return [];
+  }
+};
+
+/**
+ * ADMIN: Delete a user and all their data
+ */
+export const deleteUserAndData = async (userId: string): Promise<void> => {
+  try {
+    // Delete user's courses from /courses collection
+    const userCoursesRef = collection(db, 'users', userId, 'courses');
+    const coursesSnapshot = await getDocs(userCoursesRef);
+    
+    for (const courseDoc of coursesSnapshot.docs) {
+      const courseId = courseDoc.id;
+      // Delete from published courses
+      await deleteDoc(doc(db, 'courses', courseId)).catch(() => {});
+      // Delete from user's courses
+      await deleteDoc(doc(db, 'users', userId, 'courses', courseId)).catch(() => {});
+    }
+
+    // Delete user's rounds
+    const roundsRef = collection(db, 'users', userId, 'rounds');
+    const roundsSnapshot = await getDocs(roundsRef);
+    for (const roundDoc of roundsSnapshot.docs) {
+      await deleteDoc(doc(db, 'users', userId, 'rounds', roundDoc.id)).catch(() => {});
+    }
+
+    // Delete user's favorites
+    const favoritesRef = collection(db, 'users', userId, 'favorites');
+    const favoritesSnapshot = await getDocs(favoritesRef);
+    for (const favDoc of favoritesSnapshot.docs) {
+      await deleteDoc(doc(db, 'users', userId, 'favorites', favDoc.id)).catch(() => {});
+    }
+
+    // Delete user document
+    await deleteDoc(doc(db, 'users', userId)).catch(() => {});
+  } catch (error) {
+    console.error('Failed to delete user and data:', error);
+    throw error;
+  }
+};
+
+/**
+ * ADMIN: Delete a course from the public collection
+ */
+export const deleteCourseAdmin = async (courseId: string): Promise<void> => {
+  try {
+    await deleteDoc(doc(db, 'courses', courseId));
+  } catch (error) {
+    console.error('Failed to delete course:', error);
+    throw error;
+  }
+};

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Edit, Trash2, LogOut, AlertTriangle, Loader, Heart } from 'lucide-react';
+import { Edit, Trash2, LogOut, AlertTriangle, Loader, Heart, Copy, Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { AuthModal } from './AuthModal';
+import { AdminPanel } from './AdminPanel';
 import { getUserCourses, deleteCourse, getUserFavorites, removeFavorite, getPublishedCourses, type Course as FirestoreCourse } from '../utils/courseService';
 
 interface ProfileProps {
@@ -20,6 +21,9 @@ export const Profile: React.FC<ProfileProps> = ({ onEditCourse, onLogout, onDele
   const [error, setError] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [showUIDTooltip, setShowUIDTooltip] = useState(false);
+  const [copiedUID, setCopiedUID] = useState(false);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
 
   // Fetch user's courses and favorites
   useEffect(() => {
@@ -75,6 +79,14 @@ export const Profile: React.FC<ProfileProps> = ({ onEditCourse, onLogout, onDele
     if (onLogout) onLogout();
   };
 
+  const handleCopyUID = () => {
+    if (currentUser?.uid) {
+      navigator.clipboard.writeText(currentUser.uid);
+      setCopiedUID(true);
+      setTimeout(() => setCopiedUID(false), 2000);
+    }
+  };
+
   const handleRemoveFavorite = async (courseId: string) => {
     if (!currentUser?.uid) return;
 
@@ -93,6 +105,10 @@ export const Profile: React.FC<ProfileProps> = ({ onEditCourse, onLogout, onDele
     );
   }
 
+  if (showAdminPanel) {
+    return <AdminPanel onClose={() => setShowAdminPanel(false)} />;
+  }
+
   return (
     <div className="h-full overflow-y-auto p-6 pb-32">
       <div className="max-w-2xl mx-auto">
@@ -108,13 +124,56 @@ export const Profile: React.FC<ProfileProps> = ({ onEditCourse, onLogout, onDele
                 {currentUser.displayName || 'User'}
               </h2>
               <p className="text-lime font-bold text-sm">{currentUser.email}</p>
+              {currentUser.uid === 'NboBOK41rVcAEcs6nhRmrALQ0KC2' && (
+                <button
+                  onClick={() => setShowAdminPanel(true)}
+                  className="inline-block mt-2 text-xs font-bold text-yellow-400 hover:text-yellow-300 bg-yellow-500/10 hover:bg-yellow-500/20 px-3 py-1 rounded-lg border border-yellow-500/30 transition-colors"
+                >
+                  Admin Panel
+                </button>
+              )}
             </div>
             {currentUser.photoURL && (
-              <img
-                src={currentUser.photoURL}
-                alt="Profile"
-                className="w-16 h-16 rounded-full border-2 border-lime"
-              />
+              <div
+                onMouseEnter={() => setShowUIDTooltip(true)}
+                onMouseLeave={() => setShowUIDTooltip(false)}
+                className="relative"
+              >
+                <img
+                  src={currentUser.photoURL}
+                  alt="Profile"
+                  className="w-16 h-16 rounded-full border-2 border-lime cursor-help"
+                />
+
+                {/* UID Tooltip */}
+                <AnimatePresence>
+                  {showUIDTooltip && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="absolute bottom-full right-0 mb-2 bg-black/90 border border-lime/50 rounded-lg px-3 py-2 whitespace-nowrap z-50"
+                    >
+                      <div className="flex items-center gap-2">
+                        <code className="text-xs text-lime font-mono">
+                          {currentUser.uid.slice(0, 12)}...
+                        </code>
+                        <button
+                          onClick={handleCopyUID}
+                          className="p-1 hover:bg-lime/20 rounded transition"
+                          title="Copy full User ID"
+                        >
+                          {copiedUID ? (
+                            <Check size={14} className="text-lime" />
+                          ) : (
+                            <Copy size={14} className="text-lime/60 hover:text-lime" />
+                          )}
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             )}
           </div>
 
