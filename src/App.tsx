@@ -10,6 +10,7 @@ import HomeComponent from './components/Home';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AuthModal } from './components/AuthModal';
 import { getPublishedCourses, getUserCourses, saveRound, getUserRounds, deleteRound as deleteRoundFromFirestore } from './utils/courseService';
+import { captureGPSLocation } from './utils/geolocation';
 import type { Course as FirestoreCourse } from './utils/courseService';
 import { STREET_GOLF_COURSE, COURSES, type Course } from './constants/course';
 import { Round, Score } from './types';
@@ -37,6 +38,10 @@ function AppContent() {
   const [coursesError, setCoursesError] = useState<string | null>(null);
   const [selectedCourse, setSelectedCourse] = useState<Course>(COURSES[0]);
   
+  // Geolocation
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
+
   const currentCourseHoles = selectedCourse.holes;
   const [currentHoleIdx, setCurrentHoleIdx] = useState<number | null>(null);
   const [isCardCollapsed, setIsCardCollapsed] = useState(false);
@@ -123,6 +128,38 @@ function AppContent() {
       fetchCourses();
     }
   }, [currentUser, loading, courseRefreshTrigger]);
+
+  // Capture user location when map view is opened and no round is active
+  useEffect(() => {
+    console.log('Geolocation effect check:', { activeTab, currentHoleIdx, hasUserLocation: !!userLocation });
+    
+    if (activeTab === 'map' && currentHoleIdx === null && !userLocation) {
+      console.log('Conditions met - starting geolocation capture...');
+      const captureLocation = async () => {
+        try {
+          setLocationError(null);
+          const location = await captureGPSLocation(10000, 10);
+          console.log('✅ Location captured successfully:', location);
+          setUserLocation(location);
+        } catch (error: any) {
+          console.warn('❌ Failed to capture location:', error);
+          setLocationError(error.message || 'Could not get your location');
+        }
+      };
+
+      captureLocation();
+    } else {
+      console.log('Conditions not met for geolocation capture');
+    }
+  }, [activeTab, currentHoleIdx, userLocation]);
+
+  // Clear user location when a round is started
+  useEffect(() => {
+    if (currentHoleIdx !== null) {
+      setUserLocation(null);
+      setLocationError(null);
+    }
+  }, [currentHoleIdx]);
 
   // Ensure selectedCourse is valid when availableCourses changes
   useEffect(() => {
@@ -330,6 +367,7 @@ function AppContent() {
                   holes={currentCourseHoles} 
                   currentHoleIndex={currentHoleIdx}
                   onMarkerClick={(idx) => setCurrentHoleIdx(idx)}
+                  userLocation={userLocation || undefined}
                 />
 
                 {currentHoleIdx !== null && (

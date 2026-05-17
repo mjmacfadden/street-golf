@@ -2,7 +2,12 @@ import { Map, AdvancedMarker, Pin, useMap, useMapsLibrary } from '@vis.gl/react-
 import { Hole } from '../types';
 import { useEffect, useRef, Fragment } from 'react';
 
-function MapHandler({ holes, currentHoleIndex }: { holes: Hole[], currentHoleIndex: number | null }) {
+interface UserLocation {
+  lat: number;
+  lng: number;
+}
+
+function MapHandler({ holes, currentHoleIndex, userLocation }: { holes: Hole[], currentHoleIndex: number | null, userLocation?: UserLocation }) {
   const map = useMap();
   const mapsLib = useMapsLibrary('maps');
   const courseLinesRef = useRef<google.maps.Polyline[]>([]);
@@ -55,11 +60,24 @@ function MapHandler({ holes, currentHoleIndex }: { holes: Hole[], currentHoleInd
     };
   }, [map, mapsLib, holes, currentHoleIndex]);
 
-  // Center on current hole or whole course
+  // Center on current hole or whole course or user location
   const prevHoleIndexRef = useRef<number | null>(null);
   
   useEffect(() => {
-    if (!map || holes.length === 0 || !mapsLib) return;
+    if (!map || !mapsLib) return;
+
+    console.log('MapView centering effect:', { holesCount: holes.length, currentHoleIndex, userLocation });
+
+    // If no holes but has user location, center on user
+    if (holes.length === 0 && userLocation) {
+      console.log('✅ Centering on user location:', userLocation);
+      map.setCenter(userLocation);
+      map.setZoom(17);
+      return;
+    }
+
+    // If has holes, use course centering logic
+    if (holes.length === 0) return;
 
     if (currentHoleIndex !== null) {
       // Calculate center and zoom for the hole
@@ -91,7 +109,7 @@ function MapHandler({ holes, currentHoleIndex }: { holes: Hole[], currentHoleInd
     }
     
     prevHoleIndexRef.current = currentHoleIndex;
-  }, [map, holes, currentHoleIndex, mapsLib]);
+  }, [map, holes, currentHoleIndex, mapsLib, userLocation]);
 
   return null;
 }
@@ -100,13 +118,14 @@ interface MapViewProps {
   holes: Hole[];
   currentHoleIndex: number | null;
   onMarkerClick: (index: number) => void;
+  userLocation?: UserLocation;
 }
 
-export default function MapView({ holes, currentHoleIndex, onMarkerClick }: MapViewProps) {
+export default function MapView({ holes, currentHoleIndex, onMarkerClick, userLocation }: MapViewProps) {
   return (
     <div className="relative w-full h-full">
       <Map
-        defaultCenter={holes[0]?.teeLocation || { lat: 42.12060, lng: -87.78430 }}
+        defaultCenter={holes[0]?.teeLocation || userLocation || { lat: 42.12060, lng: -87.78430 }}
         defaultZoom={16}
         mapId="DEMO_MAP_ID"
         mapTypeId="satellite"
@@ -120,7 +139,23 @@ export default function MapView({ holes, currentHoleIndex, onMarkerClick }: MapV
           }
         }}
       >
-        <MapHandler holes={holes} currentHoleIndex={currentHoleIndex} />
+        <MapHandler holes={holes} currentHoleIndex={currentHoleIndex} userLocation={userLocation} />
+        
+        {/* User location dot (shown when map view has user location) */}
+        {userLocation && (
+          <>
+            {console.log('🔵 Rendering user location marker at:', userLocation)}
+            <AdvancedMarker
+              position={userLocation}
+              zIndex={100}
+            >
+              <div className="w-6 h-6 bg-lime rounded-full border-2 border-white shadow-lg shadow-lime/50 flex items-center justify-center">
+                <div className="w-2 h-2 bg-dark rounded-full" />
+              </div>
+            </AdvancedMarker>
+          </>
+        )}
+        
         {holes.map((hole, idx) => (
           <Fragment key={hole.number}>
             {/* Tee Marker */}

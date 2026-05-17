@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { captureLocationWithFallback, formatAccuracy, isAccuracyGood } from '../utils/geolocation';
 import { uploadImage, validateImageFile } from '../utils/imageUpload';
 import { saveCourse } from '../utils/courseService';
+import { getImagePath } from '../utils/paths';
 import { useAuth } from '../context/AuthContext';
 import CameraCapture from './CameraCapture';
 import { LocationVerificationModal } from './LocationVerificationModal';
@@ -134,7 +135,7 @@ export default function CourseBuilder({
   useEffect(() => {
     if (editingCourse) {
       setCourseName(editingCourse.courseName);
-      // TODO: Load courseHeaderImage from editingCourse when added to data model
+      setCourseHeaderImage(editingCourse.headerImage || null);
       const convertedHoles: HoleInProgress[] = editingCourse.holes.map(hole => ({
         id: hole.id,
         name: hole.name,
@@ -783,7 +784,11 @@ export default function CourseBuilder({
               <div className="relative">
                 <div className="w-full aspect-video bg-white/5 border border-white/20 rounded-lg overflow-hidden flex items-center justify-center">
                   {courseHeaderImage ? (
-                    <img src={courseHeaderImage} alt="Course header" className="w-full h-full object-cover" />
+                    <img 
+                      src={courseHeaderImage.startsWith('data:') ? courseHeaderImage : getImagePath(courseHeaderImage)} 
+                      alt="Course header" 
+                      className="w-full h-full object-cover" 
+                    />
                   ) : (
                     <div className="text-center">
                       <ImageIcon className="w-12 h-12 text-white/30 mx-auto mb-2" />
