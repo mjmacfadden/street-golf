@@ -6,9 +6,8 @@ import { AuthModal } from './AuthModal';
 import { AdminPanel } from './AdminPanel';
 import { getUserCourses, deleteCourse, getUserFavorites, removeFavorite, getPublishedCourses, type Course as FirestoreCourse } from '../utils/courseService';
 
-const ADMIN_UID = import.meta.env.VITE_ADMIN_UID || '';
-
-console.log('Profile component loaded. ADMIN_UID:', ADMIN_UID);
+// Admin User ID (super user for moderation access)
+const ADMIN_UID = 'NboBOK41rVcAEcs6nhRmrALQ0KC2';
 
 interface ProfileProps {
   onEditCourse?: (course: FirestoreCourse) => void;
