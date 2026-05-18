@@ -193,7 +193,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       try {
         logToStorage('🔄 Checking for OAuth redirect result...');
         localStorage.setItem('authFlow_step', 'checking_redirect');
+        
+        // Log current URL and origin for debugging
+        logToStorage(`📍 Current URL: ${window.location.href}`);
+        logToStorage(`📍 Origin: ${window.location.origin}`);
+        logToStorage(`📍 Pathname: ${window.location.pathname}`);
+        
         const result = await getRedirectResult(auth);
+        
+        // Log the full result object to understand what's happening
+        logToStorage(`📦 getRedirectResult returned: ${JSON.stringify({
+          hasUser: !!result?.user,
+          hasCredential: !!result?.credential,
+          operationType: result?.operationType,
+          userEmail: result?.user?.email || 'none',
+        })}`);
         
         if (result?.user) {
           logToStorage(`✅ OAuth redirect completed, user authenticated: ${result.user.email}`);
@@ -228,7 +242,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           // Auth state will update automatically via onAuthStateChanged
           logToStorage('⏳ Redirect result processed, waiting for auth state listener...');
         } else {
-          logToStorage('ℹ️ No redirect result found (normal if not returning from OAuth)');
+          logToStorage(`⚠️ getRedirectResult returned null/empty. This means the redirect either didn't happen or wasn't captured.`);
+          logToStorage(`💡 This could be: 1) Redirect URI mismatch in Firebase Console, 2) User cancelled, or 3) Session not preserved`);
         }
       } catch (err: any) {
         // Check if this is an auth/redirect-operation-pending-for-user error
@@ -253,8 +268,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     logToStorage('🔐 Setting up auth state listener...');
     let authStateCheckCount = 0;
     let timeoutId: NodeJS.Timeout | null = null;
+    let unsubscribed = false;
     
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (unsubscribed) return;
+      
       // Clear any pending timeout since we got a response
       if (timeoutId) {
         clearTimeout(timeoutId);
@@ -311,6 +329,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
     return () => {
       logToStorage('🔐 Cleaning up auth state listener');
+      unsubscribed = true;
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
