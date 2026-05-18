@@ -82,39 +82,57 @@ function AppContent() {
   useEffect(() => {
     const fetchCourses = async () => {
       try {
+        const startTime = performance.now();
         setCoursesLoading(true);
         setCoursesError(null);
+        console.log('🔄 Starting course fetch...');
 
         // Start with default courses
         let courses: Course[] = COURSES;
 
-        // Fetch published courses
+        // Fetch published courses with timeout
         try {
-          const publishedCourses = await getPublishedCourses();
+          console.log('🔄 Fetching published courses...');
+          const publishedPromise = getPublishedCourses();
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Published courses fetch timeout')), 5000)
+          );
+          
+          const publishedCourses = await Promise.race([publishedPromise, timeoutPromise]);
           const converted = publishedCourses.map(convertFirestoreCourse);
           courses = [...COURSES, ...converted];
+          console.log(`✅ Loaded ${converted.length} published courses in ${performance.now() - startTime}ms`);
         } catch (err) {
-          console.warn('Failed to fetch published courses:', err);
+          console.warn('⚠️ Failed to fetch published courses (this is optional):', err);
+          // Published courses are optional, don't fail if they don't load
         }
 
-        // Fetch user's own courses (if signed in)
+        // Fetch user's own courses (if signed in) with timeout
         if (currentUser) {
           try {
-            const userCourses = await getUserCourses(currentUser.uid);
+            console.log('🔄 Fetching user courses for:', currentUser.email);
+            const userPromise = getUserCourses(currentUser.uid);
+            const timeoutPromise = new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('User courses fetch timeout')), 5000)
+            );
+            
+            const userCourses = await Promise.race([userPromise, timeoutPromise]);
             const converted = userCourses.map(convertFirestoreCourse);
-            // Add user courses that aren't already in the list
             courses = [
               ...COURSES,
               ...converted,
             ];
+            console.log(`✅ Loaded ${converted.length} user courses in ${performance.now() - startTime}ms`);
           } catch (err) {
-            console.warn('Failed to fetch user courses:', err);
+            console.warn('⚠️ Failed to fetch user courses:', err);
+            // User courses optional too
           }
         }
 
         setAvailableCourses(courses);
+        console.log(`✅ Course fetch completed in ${performance.now() - startTime}ms. Total courses: ${courses.length}`);
       } catch (error) {
-        console.error('Error fetching courses:', error);
+        console.error('❌ Error fetching courses:', error);
         setCoursesError('Failed to load courses');
         // Keep default courses available
         setAvailableCourses(COURSES);

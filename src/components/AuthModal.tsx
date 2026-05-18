@@ -13,17 +13,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
   // Close modal when user successfully signs in (auth state has updated)
   useEffect(() => {
     if (currentUser && !loading) {
+      console.log('✅ AuthModal closing - user successfully logged in');
       onClose?.();
     }
   }, [currentUser, loading, onClose]);
 
   const handleSignIn = async () => {
+    console.log('🔐 User clicked sign-in button, opening Google OAuth...');
     await signInWithGoogle();
   };
 
   const handleBackdropClick = (e: React.MouseEvent) => {
     // Only close if clicking the backdrop itself, not the modal
     if (e.target === e.currentTarget && !loading && onClose) {
+      console.log('User clicked backdrop to close auth modal');
       onClose();
     }
   };
@@ -56,7 +59,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
         {/* Error Message */}
         {error && (
           <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
-            <p className="text-red-400 text-sm">{error}</p>
+            <p className="text-red-400 text-sm font-medium mb-2">{error}</p>
+            {error.includes('blocked') && (
+              <p className="text-red-300 text-xs">
+                Please allow pop-ups for this site in your browser settings, then try again.
+              </p>
+            )}
           </div>
         )}
 

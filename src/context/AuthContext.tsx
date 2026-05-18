@@ -42,9 +42,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const signInWithGoogle = async () => {
     try {
       setError(null);
+      setLoading(true);
       const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({
+        prompt: 'select_account'
+      });
+      
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
+      console.log('✅ Google Sign-In successful:', user.email);
 
       // Create or update user profile in Firestore
       const userRef = doc(db, 'users', user.uid);
@@ -59,12 +65,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           photoURL: user.photoURL,
           createdAt: new Date().toISOString(),
         });
+        console.log('✅ User profile created in Firestore');
       }
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : 'Failed to sign in with Google';
+    } catch (err: any) {
+      const errorMessage = err?.code === 'auth/popup-closed-by-user' 
+        ? 'Sign-in cancelled'
+        : err?.code === 'auth/popup-blocked'
+        ? 'Pop-up blocked by browser. Please check your browser settings.'
+        : err instanceof Error ? err.message : 'Failed to sign in with Google';
       setError(errorMessage);
-      console.error('Google Sign-In Error:', err);
+      console.error('❌ Google Sign-In Error:', err);
+      setLoading(false);
     }
   };
 
@@ -85,23 +96,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   // Listen to auth state changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        setCurrentUser(user);
-        // Fetch user profile from Firestore
-        try {
-          const userRef = doc(db, 'users', user.uid);
-          const userDoc = await getDoc(userRef);
-          if (userDoc.exists()) {
-            setUserProfile(userDoc.data() as UserProfile);
+      try {
+        if (user) {
+          setCurrentUser(user);
+          console.log('✅ Auth state changed - user logged in:', user.email);
+          
+          // Fetch user profile from Firestore
+          try {
+            const userRef = doc(db, 'users', user.uid);
+            const userDoc = await getDoc(userRef);
+            if (userDoc.exists()) {
+              setUserProfile(userDoc.data() as UserProfile);
+              console.log('✅ User profile loaded from Firestore');
+            }
+          } catch (err) {
+            console.error('❌ Error fetching user profile:', err);
           }
-        } catch (err) {
-          console.error('Error fetching user profile:', err);
+        } else {
+          console.log('✅ Auth state changed - user logged out');
+          setCurrentUser(null);
+          setUserProfile(null);
         }
-      } else {
-        setCurrentUser(null);
-        setUserProfile(null);
+      } finally {
+        // Always set loading to false after auth state is checked, whether user exists or not
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return unsubscribe;
