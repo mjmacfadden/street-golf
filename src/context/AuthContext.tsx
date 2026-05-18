@@ -29,9 +29,28 @@ interface AuthContextType {
   signInWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   error: string | null;
+  debugLogs: string[];
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// Helper function to log to both console and localStorage
+const logToStorage = (message: string) => {
+  const timestamp = new Date().toLocaleTimeString();
+  const fullMessage = `[${timestamp}] ${message}`;
+  console.log(fullMessage);
+  
+  // Also store in localStorage for mobile debugging
+  try {
+    let logs = JSON.parse(localStorage.getItem('authDebugLogs') || '[]') as string[];
+    logs.push(fullMessage);
+    // Keep last 50 logs
+    if (logs.length > 50) logs = logs.slice(-50);
+    localStorage.setItem('authDebugLogs', JSON.stringify(logs));
+  } catch (e) {
+    // Ignore localStorage errors
+  }
+};
 
 // Helper function to detect if app is in standalone/PWA mode
 const isStandaloneMode = (): boolean => {
@@ -57,13 +76,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [authInitialized, setAuthInitialized] = useState(false);
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
 
   const signInWithGoogle = async () => {
     try {
       setError(null);
       setLoading(true);
       const inStandaloneMode = isStandaloneMode();
-      console.log(`🔐 Starting Google OAuth flow... (PWA standalone: ${inStandaloneMode})`);
+      logToStorage(`🔐 Starting Google OAuth flow... (PWA standalone: ${inStandaloneMode})`);
+      localStorage.setItem('authFlow_started', new Date().toISOString());
       
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({
@@ -72,16 +94,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       
       if (inStandaloneMode) {
         // Use redirect-based flow for PWA mode (no popups)
-        console.log('📱 Using redirect flow for PWA mode');
+        logToStorage('📱 Using redirect flow for PWA mode');
+        logToStorage('⏳ Redirecting to Google sign-in...');
+        localStorage.setItem('authFlow_step', 'redirecting');
         await signInWithRedirect(auth, provider);
         // The redirect will navigate away, so loading will stay true
         // The auth state will update when user returns
+        logToStorage('⏳ Redirect initiated, awaiting return...');
       } else {
         // Use popup flow for browser mode
-        console.log('🌐 Using popup flow for browser mode');
+        logToStorage('🌐 Using popup flow for browser mode');
         const result = await signInWithPopup(auth, provider);
         const user = result.user;
-        console.log('✅ OAuth popup completed, user authenticated:', user.email);
+        logToStorage(`✅ OAuth popup completed, user authenticated: ${user.email}`);
 
         // Create or update user profile in Firestore (non-blocking)
         try {
@@ -96,33 +121,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
               photoURL: user.photoURL,
               createdAt: new Date().toISOString(),
             });
-            console.log('✅ User profile created in Firestore');
+            logToStorage('✅ User profile created in Firestore');
           } else {
-            console.log('✅ User profile already exists');
+            logToStorage('✅ User profile already exists');
           }
         } catch (firestoreErr) {
-          console.warn('⚠️ Non-critical error creating user profile in Firestore:', firestoreErr);
+          logToStorage(`⚠️ Non-critical error creating user profile in Firestore: ${firestoreErr}`);
         }
         
-        console.log('⏳ Waiting for auth state update...');
+        logToStorage('⏳ Waiting for auth state update...');
       }
     } catch (err: any) {
       // Only handle actual auth errors here
-      console.error('❌ Google Sign-In Error:', err);
+      logToStorage(`❌ Google Sign-In Error: ${err?.code} - ${err?.message}`);
       
       if (err?.code === 'auth/popup-closed-by-user') {
         setError('Sign-in cancelled');
-        console.log('User closed the OAuth popup');
+        logToStorage('User closed the OAuth popup');
       } else if (err?.code === 'auth/popup-blocked') {
         setError('Pop-up blocked by browser. Please check your browser settings.');
-        console.error('Browser blocked the OAuth popup');
+        logToStorage('Browser blocked the OAuth popup');
       } else if (err?.code === 'auth/cancelled-popup-request') {
         setError('Sign-in cancelled');
-        console.log('Popup request was cancelled');
+        logToStorage('Popup request was cancelled');
       } else {
         const message = err?.message || 'Failed to sign in with Google';
         setError(message);
-        console.error('Unexpected OAuth error:', message);
+        logToStorage(`Unexpected OAuth error: ${message}`);
       }
       
       // Only set loading to false for actual auth errors
@@ -133,24 +158,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const logout = async () => {
     try {
       setError(null);
+      logToStorage('🔐 Logging out...');
       await signOut(auth);
       setCurrentUser(null);
       setUserProfile(null);
+      logToStorage('✅ Logged out successfully');
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : 'Failed to log out';
       setError(errorMessage);
-      console.error('Logout Error:', err);
+      logToStorage(`❌ Logout Error: ${errorMessage}`);
     }
   };
+
+  // Sync debug logs from localStorage periodically
+  useEffect(() => {
+    const updateLogs = () => {
+      try {
+        const logs = JSON.parse(localStorage.getItem('authDebugLogs') || '[]') as string[];
+        setDebugLogs(logs);
+      } catch (e) {
+        // Ignore
+      }
+    };
+    
+    updateLogs();
+    const interval = setInterval(updateLogs, 500);
+    return () => clearInterval(interval);
+  }, []);
 
   // Handle OAuth redirect result on app init
   useEffect(() => {
     const handleRedirectResult = async () => {
       try {
+        logToStorage('🔄 Checking for OAuth redirect result...');
+        localStorage.setItem('authFlow_step', 'checking_redirect');
         const result = await getRedirectResult(auth);
+        
         if (result?.user) {
-          console.log('✅ Redirect OAuth completed, user authenticated:', result.user.email);
+          logToStorage(`✅ OAuth redirect completed, user authenticated: ${result.user.email}`);
+          localStorage.setItem('authFlow_step', 'redirect_completed');
+          logToStorage(`📝 User details: ${JSON.stringify({
+            uid: result.user.uid,
+            email: result.user.email,
+            displayName: result.user.displayName,
+          })}`);
           
           // Create or update user profile in Firestore
           try {
@@ -165,27 +217,60 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 photoURL: result.user.photoURL,
                 createdAt: new Date().toISOString(),
               });
-              console.log('✅ User profile created in Firestore (from redirect)');
+              logToStorage('✅ User profile created in Firestore (from redirect)');
+            } else {
+              logToStorage('✅ User profile already exists in Firestore');
             }
           } catch (firestoreErr) {
-            console.warn('⚠️ Non-critical error creating user profile in Firestore:', firestoreErr);
+            logToStorage(`⚠️ Non-critical error creating user profile in Firestore: ${firestoreErr}`);
           }
+          
+          // Auth state will update automatically via onAuthStateChanged
+          logToStorage('⏳ Redirect result processed, waiting for auth state listener...');
+        } else {
+          logToStorage('ℹ️ No redirect result found (normal if not returning from OAuth)');
         }
-      } catch (err) {
-        console.warn('⚠️ Error checking redirect result:', err);
+      } catch (err: any) {
+        // Check if this is an auth/redirect-operation-pending-for-user error
+        // This is normal when the redirect hasn't completed yet
+        if (err?.code === 'auth/redirect-cancelled-by-user') {
+          logToStorage('ℹ️ User cancelled OAuth redirect');
+          setError('Sign-in cancelled');
+          setLoading(false);
+        } else if (err?.code?.includes('redirect-operation-pending')) {
+          logToStorage('ℹ️ Redirect operation pending...');
+        } else {
+          logToStorage(`⚠️ Error checking redirect result: ${err?.code} - ${err?.message}`);
+        }
       }
     };
 
     handleRedirectResult();
   }, []);
 
-  // Listen to auth state changes
+  // Listen to auth state changes - this is the source of truth for login state
   useEffect(() => {
+    logToStorage('🔐 Setting up auth state listener...');
+    let authStateCheckCount = 0;
+    let timeoutId: NodeJS.Timeout | null = null;
+    
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      // Clear any pending timeout since we got a response
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+
+      authStateCheckCount++;
+      const userStatus = user ? `Logged in as ${user.email}` : 'Not logged in';
+      logToStorage(`📍 Auth state check #${authStateCheckCount}: ${userStatus}`);
+      localStorage.setItem('authFlow_step', `auth_state_check_${authStateCheckCount}`);
+      
       try {
         if (user) {
+          logToStorage(`✅ Auth state changed - user logged in: ${user.email}`);
+          logToStorage(`📝 User info: uid=${user.uid}, email=${user.email}, displayName=${user.displayName}, emailVerified=${user.emailVerified}, isAnonymous=${user.isAnonymous}`);
           setCurrentUser(user);
-          console.log('✅ Auth state changed - user logged in:', user.email);
           
           // Fetch user profile from Firestore
           try {
@@ -193,23 +278,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             const userDoc = await getDoc(userRef);
             if (userDoc.exists()) {
               setUserProfile(userDoc.data() as UserProfile);
-              console.log('✅ User profile loaded from Firestore');
+              logToStorage('✅ User profile loaded from Firestore');
+            } else {
+              logToStorage('ℹ️ User profile not found in Firestore, will be created on first action');
             }
           } catch (err) {
-            console.error('❌ Error fetching user profile:', err);
+            logToStorage(`❌ Error fetching user profile: ${err}`);
           }
         } else {
-          console.log('✅ Auth state changed - user logged out');
+          logToStorage('✅ Auth state changed - user logged out or not authenticated');
           setCurrentUser(null);
           setUserProfile(null);
         }
+      } catch (err) {
+        logToStorage(`❌ Error in auth state change handler: ${err}`);
       } finally {
-        // Always set loading to false after auth state is checked, whether user exists or not
+        // Always set loading to false when auth state is determined
+        logToStorage('✅ Auth state check complete, setting loading to false');
+        localStorage.setItem('authFlow_step', 'auth_state_resolved');
         setLoading(false);
+        setAuthInitialized(true);
       }
     });
 
-    return unsubscribe;
+    // Safety timeout: If auth state hasn't resolved in 5 seconds, force it
+    timeoutId = setTimeout(() => {
+      logToStorage('⚠️ Auth state check timeout after 5 seconds, forcing loading to false');
+      localStorage.setItem('authFlow_step', 'auth_state_timeout');
+      setLoading(false);
+      setAuthInitialized(true);
+    }, 5000);
+
+    return () => {
+      logToStorage('🔐 Cleaning up auth state listener');
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      unsubscribe();
+    };
   }, []);
 
   const value: AuthContextType = {
@@ -219,6 +325,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     signInWithGoogle,
     logout,
     error,
+    debugLogs,
   };
 
   return (

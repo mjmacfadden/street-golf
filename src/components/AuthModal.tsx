@@ -1,6 +1,6 @@
-import React, { useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { LogIn } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { LogIn, ChevronDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 interface AuthModalProps {
@@ -8,7 +8,8 @@ interface AuthModalProps {
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
-  const { currentUser, signInWithGoogle, loading, error } = useAuth();
+  const { currentUser, signInWithGoogle, loading, error, debugLogs } = useAuth();
+  const [showDebugLogs, setShowDebugLogs] = useState(false);
 
   // Close modal when user successfully signs in (auth state has updated)
   useEffect(() => {
@@ -41,7 +42,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
       <motion.div
         initial={{ scale: 0.95, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="bg-dark rounded-2xl p-8 max-w-sm w-full mx-4 border border-white/10"
+        className="bg-dark rounded-2xl p-8 max-w-sm w-full mx-4 border border-white/10 max-h-[80vh] overflow-y-auto"
       >
         {/* Header */}
         <div className="text-center mb-8">
@@ -105,9 +106,43 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
         </button>
 
         {/* Info Text */}
-        <p className="text-center text-white/50 text-sm">
+        <p className="text-center text-white/50 text-sm mb-6">
           By signing in, you agree to our Terms of Service and Privacy Policy
         </p>
+
+        {/* Debug Logs Panel */}
+        {debugLogs.length > 0 && (
+          <div className="border-t border-white/10 pt-4">
+            <button
+              onClick={() => setShowDebugLogs(!showDebugLogs)}
+              className="w-full flex items-center justify-between p-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-white/70 transition-colors"
+            >
+              <span>🔍 Debug Info ({debugLogs.length} logs)</span>
+              <ChevronDown 
+                size={16}
+                className={`transition-transform ${showDebugLogs ? 'rotate-180' : ''}`}
+              />
+            </button>
+            <AnimatePresence>
+              {showDebugLogs && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="mt-2 bg-black/50 rounded-lg overflow-hidden"
+                >
+                  <div className="p-3 max-h-48 overflow-y-auto text-[11px] font-mono text-white/60 space-y-1">
+                    {debugLogs.slice(-10).map((log, idx) => (
+                      <div key={idx} className="text-white/50 hover:text-white/80 break-words">
+                        {log}
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
       </motion.div>
     </motion.div>
   );
