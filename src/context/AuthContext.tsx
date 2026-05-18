@@ -5,6 +5,8 @@ import {
 } from '../config/firebase';
 import {
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
   signOut,
   User,
@@ -31,6 +33,23 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Helper function to detect if app is in standalone/PWA mode
+const isStandaloneMode = (): boolean => {
+  // Check if running as installed PWA (iOS)
+  if (window.navigator.standalone === true) {
+    return true;
+  }
+  // Check if running as installed PWA (Android)
+  if (window.matchMedia('(display-mode: standalone)').matches) {
+    return true;
+  }
+  // Check if running as fullscreen (some PWAs use this)
+  if (window.matchMedia('(display-mode: fullscreen)').matches) {
+    return true;
+  }
+  return false;
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
@@ -43,43 +62,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       setError(null);
       setLoading(true);
-      console.log('🔐 Starting Google OAuth flow...');
+      const inStandaloneMode = isStandaloneMode();
+      console.log(`🔐 Starting Google OAuth flow... (PWA standalone: ${inStandaloneMode})`);
       
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({
         prompt: 'select_account',
       });
       
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-      console.log('✅ OAuth popup completed, user authenticated:', user.email);
+      if (inStandaloneMode) {
+        // Use redirect-based flow for PWA mode (no popups)
+        console.log('📱 Using redirect flow for PWA mode');
+        await signInWithRedirect(auth, provider);
+        // The redirect will navigate away, so loading will stay true
+        // The auth state will update when user returns
+      } else {
+        // Use popup flow for browser mode
+        console.log('🌐 Using popup flow for browser mode');
+        const result = await signInWithPopup(auth, provider);
+        const user = result.user;
+        console.log('✅ OAuth popup completed, user authenticated:', user.email);
 
-      // Create or update user profile in Firestore (non-blocking)
-      // This should NOT block the modal from closing or set loading to false
-      try {
-        const userRef = doc(db, 'users', user.uid);
-        const userDoc = await getDoc(userRef);
+        // Create or update user profile in Firestore (non-blocking)
+        try {
+          const userRef = doc(db, 'users', user.uid);
+          const userDoc = await getDoc(userRef);
 
-        if (!userDoc.exists()) {
-          await setDoc(userRef, {
-            uid: user.uid,
-            email: user.email,
-            displayName: user.displayName,
-            photoURL: user.photoURL,
-            createdAt: new Date().toISOString(),
-          });
-          console.log('✅ User profile created in Firestore');
-        } else {
-          console.log('✅ User profile already exists');
+          if (!userDoc.exists()) {
+            await setDoc(userRef, {
+              uid: user.uid,
+              email: user.email,
+              displayName: user.displayName,
+              photoURL: user.photoURL,
+              createdAt: new Date().toISOString(),
+            });
+            console.log('✅ User profile created in Firestore');
+          } else {
+            console.log('✅ User profile already exists');
+          }
+        } catch (firestoreErr) {
+          console.warn('⚠️ Non-critical error creating user profile in Firestore:', firestoreErr);
         }
-      } catch (firestoreErr) {
-        console.warn('⚠️ Non-critical error creating user profile in Firestore:', firestoreErr);
-        // Don't fail the sign-in if Firestore profile creation fails
-        // The auth state is already updated
+        
+        console.log('⏳ Waiting for auth state update...');
       }
-      
-      // Don't set loading to false here - let onAuthStateChanged handle it
-      console.log('⏳ Waiting for auth state update...');
     } catch (err: any) {
       // Only handle actual auth errors here
       console.error('❌ Google Sign-In Error:', err);
@@ -117,6 +143,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       console.error('Logout Error:', err);
     }
   };
+
+  // Handle OAuth redirect result on app init
+  useEffect(() => {
+    const handleRedirectResult = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result?.user) {
+          console.log('✅ Redirect OAuth completed, user authenticated:', result.user.email);
+          
+          // Create or update user profile in Firestore
+          try {
+            const userRef = doc(db, 'users', result.user.uid);
+            const userDoc = await getDoc(userRef);
+
+            if (!userDoc.exists()) {
+              await setDoc(userRef, {
+                uid: result.user.uid,
+                email: result.user.email,
+                displayName: result.user.displayName,
+                photoURL: result.user.photoURL,
+                createdAt: new Date().toISOString(),
+              });
+              console.log('✅ User profile created in Firestore (from redirect)');
+            }
+          } catch (firestoreErr) {
+            console.warn('⚠️ Non-critical error creating user profile in Firestore:', firestoreErr);
+          }
+        }
+      } catch (err) {
+        console.warn('⚠️ Error checking redirect result:', err);
+      }
+    };
+
+    handleRedirectResult();
+  }, []);
 
   // Listen to auth state changes
   useEffect(() => {
