@@ -8,6 +8,8 @@ import { getUserCourses, deleteCourse, getUserFavorites, removeFavorite, getPubl
 
 const ADMIN_UID = import.meta.env.VITE_ADMIN_UID || '';
 
+console.log('Profile component loaded. ADMIN_UID:', ADMIN_UID);
+
 interface ProfileProps {
   onEditCourse?: (course: FirestoreCourse) => void;
   onLogout?: () => void;
