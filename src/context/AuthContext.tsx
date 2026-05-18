@@ -43,38 +43,63 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       setError(null);
       setLoading(true);
+      console.log('🔐 Starting Google OAuth flow...');
+      
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({
-        prompt: 'select_account'
+        prompt: 'select_account',
       });
       
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
-      console.log('✅ Google Sign-In successful:', user.email);
+      console.log('✅ OAuth popup completed, user authenticated:', user.email);
 
-      // Create or update user profile in Firestore
-      const userRef = doc(db, 'users', user.uid);
-      const userDoc = await getDoc(userRef);
+      // Create or update user profile in Firestore (non-blocking)
+      // This should NOT block the modal from closing or set loading to false
+      try {
+        const userRef = doc(db, 'users', user.uid);
+        const userDoc = await getDoc(userRef);
 
-      if (!userDoc.exists()) {
-        // First time sign in - create profile
-        await setDoc(userRef, {
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName,
-          photoURL: user.photoURL,
-          createdAt: new Date().toISOString(),
-        });
-        console.log('✅ User profile created in Firestore');
+        if (!userDoc.exists()) {
+          await setDoc(userRef, {
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName,
+            photoURL: user.photoURL,
+            createdAt: new Date().toISOString(),
+          });
+          console.log('✅ User profile created in Firestore');
+        } else {
+          console.log('✅ User profile already exists');
+        }
+      } catch (firestoreErr) {
+        console.warn('⚠️ Non-critical error creating user profile in Firestore:', firestoreErr);
+        // Don't fail the sign-in if Firestore profile creation fails
+        // The auth state is already updated
       }
+      
+      // Don't set loading to false here - let onAuthStateChanged handle it
+      console.log('⏳ Waiting for auth state update...');
     } catch (err: any) {
-      const errorMessage = err?.code === 'auth/popup-closed-by-user' 
-        ? 'Sign-in cancelled'
-        : err?.code === 'auth/popup-blocked'
-        ? 'Pop-up blocked by browser. Please check your browser settings.'
-        : err instanceof Error ? err.message : 'Failed to sign in with Google';
-      setError(errorMessage);
+      // Only handle actual auth errors here
       console.error('❌ Google Sign-In Error:', err);
+      
+      if (err?.code === 'auth/popup-closed-by-user') {
+        setError('Sign-in cancelled');
+        console.log('User closed the OAuth popup');
+      } else if (err?.code === 'auth/popup-blocked') {
+        setError('Pop-up blocked by browser. Please check your browser settings.');
+        console.error('Browser blocked the OAuth popup');
+      } else if (err?.code === 'auth/cancelled-popup-request') {
+        setError('Sign-in cancelled');
+        console.log('Popup request was cancelled');
+      } else {
+        const message = err?.message || 'Failed to sign in with Google';
+        setError(message);
+        console.error('Unexpected OAuth error:', message);
+      }
+      
+      // Only set loading to false for actual auth errors
       setLoading(false);
     }
   };
