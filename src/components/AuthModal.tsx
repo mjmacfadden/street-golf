@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LogIn, ChevronDown } from 'lucide-react';
+import { LogIn, ChevronDown, Copy, Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 interface AuthModalProps {
@@ -10,6 +10,7 @@ interface AuthModalProps {
 export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
   const { currentUser, signInWithGoogle, loading, error, debugLogs } = useAuth();
   const [showDebugLogs, setShowDebugLogs] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState(false);
 
   // Close modal when user successfully signs in (auth state has updated)
   useEffect(() => {
@@ -22,6 +23,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
   const handleSignIn = async () => {
     console.log('🔐 User clicked sign-in button, opening Google OAuth...');
     await signInWithGoogle();
+  };
+
+  const handleCopyLogs = async () => {
+    const logsText = debugLogs.join('\n');
+    try {
+      await navigator.clipboard.writeText(logsText);
+      setCopyFeedback(true);
+      setTimeout(() => setCopyFeedback(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy logs:', err);
+    }
   };
 
   const handleBackdropClick = (e: React.MouseEvent) => {
@@ -138,6 +150,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
                       </div>
                     ))}
                   </div>
+                  <button
+                    onClick={handleCopyLogs}
+                    className="w-full px-4 py-2 bg-white/10 hover:bg-white/20 border-t border-white/10 text-white/70 hover:text-white font-semibold text-xs flex items-center justify-center gap-2 transition-colors"
+                  >
+                    {copyFeedback ? (
+                      <>
+                        <Check size={14} className="text-lime" />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={14} />
+                        Copy Logs
+                      </>
+                    )}
+                  </button>
                 </motion.div>
               )}
             </AnimatePresence>
