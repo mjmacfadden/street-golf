@@ -371,7 +371,7 @@ function AppContent() {
                 />
 
                 {currentHoleIdx !== null && (
-                  <div className="absolute bottom-10 sm:bottom-6 left-4 right-4 z-10">
+                  <div className="absolute bottom-32 sm:bottom-24 left-4 right-4 z-10">
                     <motion.div 
                       initial={{ y: 50, opacity: 0 }}
                       animate={{ y: 0, opacity: 1 }}
