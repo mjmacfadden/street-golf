@@ -27,14 +27,37 @@
       // Handle Firebase OAuth redirect at root domain
       // Firebase redirects to root (https://mjmacfadden.github.io) but app is at /street-golf/
       // This script detects the redirect and forwards it to /street-golf/ with query params preserved
+      
+      // Debug the redirect script behavior
+      const redirectDebug = {
+        pathname: window.location.pathname,
+        search: window.location.search,
+        hash: window.location.hash,
+        href: window.location.href,
+        hostname: window.location.hostname,
+        timestamp: new Date().toLocaleTimeString()
+      };
+      localStorage.setItem('redirectScriptDebug', JSON.stringify(redirectDebug));
+      
+      // Case 1: At root with OAuth query params - redirect to /street-golf/ with params
       if (window.location.pathname === '/' && window.location.search) {
-        // Firebase redirect detected at root - forward to /street-golf/ with query string
+        localStorage.setItem('redirectScriptAction', 'redirecting_root_with_query');
         window.location.href = '/street-golf/' + window.location.search;
-      } else if (window.location.pathname === '/' && !window.location.search) {
-        // Regular root access - redirect to /street-golf/
+      } 
+      // Case 2: At root without query params - redirect to /street-golf/
+      else if (window.location.pathname === '/' && !window.location.search) {
         if (window.location.hostname !== 'localhost') {
+          localStorage.setItem('redirectScriptAction', 'redirecting_root_to_subdir');
           window.location.href = '/street-golf/';
         }
+      } 
+      // Case 3: Already at /street-golf/ with OAuth params - good, no redirect needed
+      else if (window.location.pathname === '/street-golf/' && window.location.search) {
+        localStorage.setItem('redirectScriptAction', 'already_at_subdir_with_oauth_params');
+      }
+      // Case 4: Already at /street-golf/ without params - check if we need to go to root for OAuth
+      else if (window.location.pathname === '/street-golf/' && !window.location.search) {
+        localStorage.setItem('redirectScriptAction', 'at_subdir_no_params');
       }
     </script>
   </head>

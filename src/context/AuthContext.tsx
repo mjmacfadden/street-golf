@@ -191,6 +191,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     const handleRedirectResult = async () => {
       try {
+        // Check if redirect script ran and log its status
+        try {
+          const redirectDebug = JSON.parse(localStorage.getItem('redirectScriptDebug') || '{}');
+          const redirectAction = localStorage.getItem('redirectScriptAction');
+          logToStorage(`🔀 Redirect script info: ${JSON.stringify({
+            action: redirectAction,
+            rootPathname: redirectDebug.pathname,
+            rootSearch: redirectDebug.search,
+          })}`);
+        } catch (e) {
+          logToStorage('🔀 No redirect script debug info found');
+        }
+        
         logToStorage('🔄 Checking for OAuth redirect result...');
         localStorage.setItem('authFlow_step', 'checking_redirect');
         
@@ -243,7 +256,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           logToStorage('⏳ Redirect result processed, waiting for auth state listener...');
         } else {
           logToStorage(`⚠️ getRedirectResult returned null/empty. This means the redirect either didn't happen or wasn't captured.`);
-          logToStorage(`💡 This could be: 1) Redirect URI mismatch in Firebase Console, 2) User cancelled, or 3) Session not preserved`);
+          logToStorage(`💡 This could be: 1) Redirect URI mismatch in Firebase Console, 2) User cancelled, 3) Query params not preserved, or 4) Session not preserved`);
+          
+          // Check localStorage to see if anything is stored
+          try {
+            const keys = Object.keys(localStorage);
+            const firebaseKeys = keys.filter(k => k.includes('firebase') || k.includes('auth'));
+            if (firebaseKeys.length > 0) {
+              logToStorage(`💾 Found ${firebaseKeys.length} Firebase storage keys`);
+            } else {
+              logToStorage(`⚠️ No Firebase storage keys found - session may not be persisting`);
+            }
+          } catch (e) {
+            logToStorage(`⚠️ Could not check localStorage: ${e}`);
+          }
         }
       } catch (err: any) {
         // Check if this is an auth/redirect-operation-pending-for-user error
