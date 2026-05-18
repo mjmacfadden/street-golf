@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { LogIn } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -8,11 +8,17 @@ interface AuthModalProps {
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({ onClose }) => {
-  const { signInWithGoogle, loading, error } = useAuth();
+  const { currentUser, signInWithGoogle, loading, error } = useAuth();
+
+  // Close modal when user successfully signs in (auth state has updated)
+  useEffect(() => {
+    if (currentUser && !loading) {
+      onClose?.();
+    }
+  }, [currentUser, loading, onClose]);
 
   const handleSignIn = async () => {
     await signInWithGoogle();
-    if (onClose) onClose();
   };
 
   const handleBackdropClick = (e: React.MouseEvent) => {
